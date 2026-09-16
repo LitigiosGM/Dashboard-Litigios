@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de Litigios</title>
+<style>
+  :root{
+    --gris:#808284;
+    --lima:#CFDC27;
+    --oliva:#AAB720;
+    --bg:#f4f4f5;
+    --card:#ffffff;
+    --texto:#2b2b2d;
+    --borde:#e3e3e5;
+    --rojo:#c0392b;
+    --rojo-bg:#fbdcdb;
+    --morado:#7d4fb0;
+    --morado-bg:#e9dcf7;
+    --verde:#3f8f3f;
+    --verde-bg:#dcf3dc;
+    --azul:#2f6fd6;
+    --azul-bg:#dde8fb;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--texto);
+  }
+  header{
+    background:linear-gradient(135deg,#3a3a3c,var(--gris));
+    color:#fff;
+    padding:22px 28px;
+  }
+  header h1{margin:0; font-size:1.4rem; font-weight:700; letter-spacing:.3px;}
+  header .sub{margin-top:4px; font-size:.85rem; opacity:.85;}
+  .wrap{max-width:1320px; margin:0 auto; padding:20px 20px 60px;}
+
+  /* ---- Barras de carga / conexión ---- */
+  .upload-bar{
+    background:var(--card);
+    border:1px solid var(--borde);
+    border-radius:12px;
+    padding:14px 18px;
+    margin-bottom:14px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .upload-bar .label{font-size:.8rem; color:var(--gris); font-weight:600;}
+  .upload-bar input[type=file]{font-size:.82rem; max-width:260px;}
+  .btn{
+    border:none; border-radius:8px; padding:9px 16px; font-size:.85rem;
+    font-weight:600; cursor:pointer; background:var(--oliva); color:#fff;
+    transition:background .15s ease;
+  }
+  .btn:hover{background:var(--lima); color:#2b2b2d;}
+  .btn:disabled{background:#c9c9c9; cursor:not-allowed;}
+  .btn-ghost{background:#fff; color:var(--gris); border:1px solid var(--borde);}
+  .btn-ghost:hover{background:#f2f2ee; color:var(--texto);}
+  .upload-status{font-size:.78rem; color:var(--gris);}
+  .upload-status.ok{color:#4c7a2a; font-weight:600;}
+  .upload-status.err{color:#b3261e; font-weight:600;}
+  .last-updated{flex-basis:100%; font-size:.75rem; color:var(--gris); margin-top:2px;}
+
+  h2.section-title{font-size:1rem; font-weight:800; margin:28px 0 10px; color:var(--texto);}
+  h2.section-title:first-child{margin-top:0;}
+  .section-hint{font-size:.76rem; color:var(--gris); margin:-6px 0 12px;}
+
+  /* ---- Tarjetas KPI ---- */
+  .kpi-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:6px;}
+  .kpi-card{
+    background:var(--card); border:1px solid var(--borde); border-radius:14px;
+    padding:16px 14px; text-align:center; border-top:4px solid var(--gris);
+    cursor:pointer; transition:box-shadow .15s ease, transform .1s ease; user-select:none;
+  }
+  .kpi-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.1);}
+  .kpi-card.selected{outline:2px solid var(--oliva); box-shadow:0 0 0 4px rgba(170,183,32,.22);}
+  .kpi-card.total{border-top-color:var(--oliva); background:#fbfbf2;}
+  .kpi-card .kpi-label{font-size:.72rem; text-transform:uppercase; letter-spacing:.3px; color:var(--gris); font-weight:700;}
+  .kpi-card .kpi-value{font-size:1.9rem; font-weight:800; margin:6px 0 2px; color:var(--texto);}
+  .kpi-card .kpi-breakdown{margin-top:8px; border-top:1px dashed var(--borde); padding-top:8px; text-align:left;}
+  .kpi-breakdown-row{display:flex; justify-content:space-between; font-size:.74rem; color:var(--gris); padding:3px 4px; border-radius:5px; cursor:pointer;}
+  .kpi-breakdown-row:hover{background:#f4f6e6;}
+  .kpi-breakdown-row.selected{background:var(--oliva); color:#fff;}
+  .kpi-breakdown-row.selected b{color:#fff;}
+  .kpi-breakdown-row b{color:var(--texto); font-weight:700;}
+
+  .filter-chip-wrap{display:flex; align-items:center; gap:10px; margin:-4px 0 14px;}
+  .filter-chip{
+    background:var(--azul-bg); color:var(--azul); font-weight:700; font-size:.78rem;
+    padding:6px 12px; border-radius:20px;
+  }
+  .btn-sm{padding:6px 12px; font-size:.76rem;}
+
+  @media (max-width:900px){ .kpi-row{grid-template-columns:repeat(2,1fr);} }
+
+  /* ---- Tabla resumen procesos ---- */
+  .table-controls{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; align-items:center;}
+  .table-controls input, .table-controls select{
+    padding:8px 10px; border-radius:8px; border:1px solid var(--borde); font-size:.83rem;
+  }
+  .table-controls input{flex:1; min-width:220px;}
+  .table-controls select{flex:1; min-width:160px;}
+  .table-wrap{
+    background:var(--card); border:1px solid var(--borde); border-radius:12px;
+    overflow:auto; max-height:600px;
+  }
+  table.data-table{border-collapse:collapse; width:100%; font-size:.8rem;}
+  table.data-table thead th{
+    position:sticky; top:0; background:#f0f0ee; color:var(--texto); text-align:left;
+    padding:9px 10px; font-weight:700; border-bottom:2px solid var(--borde); white-space:nowrap;
+  }
+  table.data-table tbody td{padding:8px 10px; border-bottom:1px solid var(--borde); vertical-align:top;}
+  table.data-table tbody tr:hover{background:#fafaf5;}
+  .badge{display:inline-block; padding:2px 8px; border-radius:20px; font-size:.7rem; font-weight:700;}
+  .badge.activo{background:var(--verde-bg); color:var(--verde);}
+  .badge.otro{background:#eee; color:var(--gris);}
+  .row-count{font-size:.76rem; color:var(--gris); margin:6px 2px 14px;}
+
+  .empty-state{padding:40px 20px; text-align:center; color:var(--gris); font-size:.9rem;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Dashboard de Litigios — Resumen</h1>
+  <div class="sub">Todo en una sola hoja, discriminado por área: Laboral · Ejecutivos · Corporativo</div>
+</header>
+
+<div class="wrap">
+
+  <!-- Conexión automática con el Excel en SharePoint / OneDrive -->
+  <div class="upload-bar" id="graphBar">
+    <span class="label">Sincronización automática:</span>
+    <button class="btn" id="btnConectar">Conectar con Microsoft 365</button>
+    <span class="upload-status" id="graphStatus">No conectado. Carga el archivo manualmente abajo mientras tanto.</span>
+  </div>
+
+  <!-- Carga manual (respaldo) -->
+  <div class="upload-bar">
+    <span class="label">Actualizar datos manualmente (respaldo):</span>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <button class="btn" id="btnActualizar">Cargar y actualizar</button>
+    <button class="btn btn-ghost" id="btnGuardar" disabled title="Carga un archivo primero">Guardar HTML actualizado</button>
+    <span class="upload-status" id="uploadStatus"></span>
+    <div class="last-updated" id="lastUpdated"></div>
+  </div>
+
+  <!-- ================= HOJA ÚNICA: RESUMEN ================= -->
+  <div id="pane-resumen">
+    <h2 class="section-title">Procesos activos</h2>
+    <div class="kpi-row" id="kpiProcesosActivos"></div>
+
+    <h2 class="section-title">Tareas por área</h2>
+    <div class="kpi-row" id="kpiTareasArea"></div>
+
+    <h2 class="section-title">Audiencias próximas</h2>
+    <div class="kpi-row" id="kpiAudiencias"></div>
+
+    <h2 class="section-title">Procesos sin tareas asignadas</h2>
+    <div class="kpi-row" id="kpiSinTareas"></div>
+
+    <h2 class="section-title">Tareas pendientes de ejecutar</h2>
+    <div class="kpi-row" id="kpiPendientesEjecutar"></div>
+
+    <h2 class="section-title">Tareas pendientes de asignar</h2>
+    <div class="kpi-row" id="kpiPendientesAsignar"></div>
+
+    <h2 class="section-title">Tareas pendientes por cerrar (Secretaría)</h2>
+    <div class="kpi-row" id="kpiPendientesCerrar"></div>
+
+    <h2 class="section-title" id="resultadosTitulo">Consolidado de procesos</h2>
+    <div class="filter-chip-wrap" id="filterChipWrap" style="display:none;">
+      <span class="filter-chip" id="filterChip"></span>
+      <button class="btn btn-ghost btn-sm" id="btnQuitarFiltro" type="button">Quitar filtro ✕</button>
+    </div>
+    <div class="table-controls">
+      <select id="filtroArea"><option value="">Área: todas</option></select>
+      <select id="filtroCliente"><option value="">Cliente: todos</option></select>
+      <select id="filtroDemandante"><option value="">Demandante: todos</option></select>
+      <select id="filtroDemandado"><option value="">Demandado: todos</option></select>
+      <select id="filtroCarpeta"><option value="">N° Carpeta Interna: todas</option></select>
+    </div>
+    <div class="row-count" id="resumenCount"></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead id="resumenThead"></thead>
+        <tbody id="resumenTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script>
+/* ============================================================
+   MAPEO DE COLUMNAS (según ESTRUCTURA_CUADRO_LITIGIOS)
+   ============================================================ */
+const AREA_SHEETS = {
+  LABORAL:     { main:'LABORAL',     tasks:'TAREAS LABORAL LITIGIOS' },
+  EJECUTIVOS:  { main:'EJECUTIVOS',  tasks:'TAREAS EJECUTIVOS' },
+  CORPORATIVO: { main:'CORPORATIVO', tasks:'TAREAS CORPORATIVO' }
+};
+
+// Columnas (letras de Excel) de las hojas principales de procesos
+const AREA_COLS = {
+  LABORAL:     { n:'A', area:'B', cliente:'F', demandante:'G', demandado:'H', tematica:'K', radicado:'L',
+                 apoderado:'T', carpeta:'V', estado:'AE', audiencia:'Y', tareasPendientes:'AH',
+                 fechaInicio:'C', dependencia:'O', instancia:'P', municipio:'R', abogado:'S' },
+  EJECUTIVOS:  { n:'A', area:'B', cliente:'F', demandante:'G', demandado:'H', tematica:'K', radicado:'L',
+                 apoderado:'T', carpeta:'V', estado:'AG', audiencia:'Y', tareasPendientes:'AJ',
+                 fechaInicio:'C', dependencia:'O', instancia:'P', municipio:'R', abogado:'S' },
+  CORPORATIVO: { n:'A', area:'B', cliente:'F', demandante:'G', demandado:'H', tematica:'K', radicado:'L',
+                 apoderado:'T', carpeta:'V', estado:'AE', audiencia:'Y', tareasPendientes:'AH',
+                 fechaInicio:'C', dependencia:'O', instancia:'P', municipio:'R', abogado:'S' }
+};
+
+// Columnas (letras de Excel) de las hojas de tareas (mismo esquema en las 3)
+const TASK_COLS = { numeroProceso:'A', gestion:'P', estadoK:'K', estadoR:'R', descripcion:'B', abogado:'C', vencimiento:'D', cliente:'G' };
+
+const AREA_LABELS = { LABORAL:'Laboral', EJECUTIVOS:'Ejecutivos', CORPORATIVO:'Corporativo' };
+const AREA_KEYS = ['LABORAL','EJECUTIVOS','CORPORATIVO'];
+
+/* ============================================================
+   ESTADO GLOBAL DE DATOS
+   ============================================================ */
+let DATA = null; // { LABORAL:{main:[rows]], tasks:[rows]}, EJECUTIVOS:{...}, CORPORATIVO:{...} }
+
+/* ============================================================
+   UTILIDADES
+   ============================================================ */
+function norm(v){
+  if(v===null || v===undefined) return '';
+  return String(v).trim().toUpperCase();
+}
+function colIdx(letter){ return XLSX.utils.decode_col(letter); }
+function cell(row, letter){
+  const idx = colIdx(letter);
+  return row && row.length > idx ? row[idx] : null;
+}
+function findSheetName(wb, wanted){
+  const w = wanted.trim().toUpperCase();
+  return wb.SheetNames.find(n => n.trim().toUpperCase() === w) || null;
+}
+function sheetToRows(wb, sheetName){
+  const name = findSheetName(wb, sheetName);
+  if(!name) return [];
+  const ws = wb.Sheets[name];
+  if(!ws || !ws['!ref']) return [];
+  const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null, raw:true });
+  // La primera fila es encabezado; el resto son datos
+  return rows.slice(1).filter(r => r && r.some(v => v !== null && v !== ''));
+}
+function fmtDateTime(d){
+  if(!d) return '';
+  try{
+    return d.toLocaleString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  }catch(e){ return String(d); }
+}
+
+/* ============================================================
+   FILAS "TIDY" DE PROCESOS Y TAREAS (base de métricas y filtros)
+   ============================================================ */
+let PROCESOS_ROWS = [];
+let TAREAS_ROWS = [];
+let LAST_METRICAS = null;
+let FILTRO_ACTIVO = null; // { family, area: 'LABORAL'|...|null, status: string|null }
+
+function buildProcesosRows(){
+  const out = [];
+  AREA_KEYS.forEach(area => {
+    const cols = AREA_COLS[area];
+    DATA[area].main.forEach(r => {
+      out.push({
+        areaKey: area,
+        area: AREA_LABELS[area],
+        n: cell(r, cols.n),
+        cliente: cell(r, cols.cliente),
+        demandante: cell(r, cols.demandante),
+        demandado: cell(r, cols.demandado),
+        tematica: cell(r, cols.tematica),
+        radicado: cell(r, cols.radicado),
+        apoderado: cell(r, cols.apoderado),
+        carpeta: cell(r, cols.carpeta),
+        estado: cell(r, cols.estado),
+        audiencia: cell(r, cols.audiencia),
+        tareasPendientes: cell(r, cols.tareasPendientes)
+      });
+    });
+  });
+  return out;
+}
+
+function buildTareasRows(){
+  // Índice de procesos por área + N° (columna A) para poder cruzar cada
+  // tarea con su proceso, tal como se identifica en el archivo real:
+  // el N° de la columna A de la hoja de tareas corresponde al N° de la
+  // columna A de la hoja de procesos de esa misma área.
+  const indice = {};
+  PROCESOS_ROWS.forEach(p => {
+    if(p.n !== null && p.n !== undefined && p.n !== ''){
+      indice[`${p.areaKey}||${norm(p.n)}`] = p;
+    }
+  });
+
+  const out = [];
+  AREA_KEYS.forEach(area => {
+    DATA[area].tasks.forEach(r => {
+      const numeroProceso = cell(r, TASK_COLS.numeroProceso);
+      const proceso = (numeroProceso !== null && numeroProceso !== '')
+        ? indice[`${area}||${norm(numeroProceso)}`]
+        : undefined;
+
+      out.push({
+        areaKey: area,
+        area: AREA_LABELS[area],
+        numeroProceso: numeroProceso,
+        // Cliente/Demandante/Demandado/Carpeta/Radicado se toman del
+        // proceso cruzado (más confiables); si no hay cruce, se usa el
+        // cliente propio de la hoja de tareas como respaldo.
+        cliente: proceso ? proceso.cliente : cell(r, TASK_COLS.cliente),
+        demandante: proceso ? proceso.demandante : null,
+        demandado: proceso ? proceso.demandado : null,
+        carpeta: proceso ? proceso.carpeta : null,
+        radicado: proceso ? proceso.radicado : null,
+        descripcion: cell(r, TASK_COLS.descripcion),
+        abogado: cell(r, TASK_COLS.abogado),
+        vencimiento: cell(r, TASK_COLS.vencimiento),
+        gestion: cell(r, TASK_COLS.gestion),
+        estadoK: cell(r, TASK_COLS.estadoK),
+        estadoR: cell(r, TASK_COLS.estadoR)
+      });
+    });
+  });
+  return out;
+}
+
+/* ============================================================
+   CÁLCULO DE MÉTRICAS DE LA HOJA RESUMEN
+   ============================================================ */
+function calcularMetricas(){
+  const out = {
+    procesosActivos: {}, tareasArea: {}, audiencias: {}, sinTareas: {},
+    pendientesEjecutar: {}, pendientesAsignar: {}, pendientesCerrar: {}
+  };
+
+  AREA_KEYS.forEach(area => {
+    const procesos = PROCESOS_ROWS.filter(r => r.areaKey === area);
+    const tareas = TAREAS_ROWS.filter(r => r.areaKey === area);
+
+    const activos = procesos.filter(r => norm(r.estado) === 'ACTIVO');
+    out.procesosActivos[area] = activos.length;
+
+    out.audiencias[area] = activos.filter(r => r.audiencia !== null && r.audiencia !== '' && r.audiencia !== undefined).length;
+
+    out.sinTareas[area] = activos.filter(r => {
+      const v = r.tareasPendientes;
+      const num = (v === null || v === '') ? null : Number(v);
+      return num === 0;
+    }).length;
+
+    const noGestionadas = tareas.filter(r => norm(r.gestion) !== 'GESTIONADA');
+    const breakdown = {};
+    noGestionadas.forEach(r => {
+      const k = norm(r.estadoK) || '(SIN ESTADO)';
+      breakdown[k] = (breakdown[k] || 0) + 1;
+    });
+    out.tareasArea[area] = { total: noGestionadas.length, breakdown };
+
+    out.pendientesEjecutar[area] = tareas.filter(r => norm(r.gestion) === 'NO GESTIONADA').length;
+    out.pendientesAsignar[area] = tareas.filter(r => norm(r.estadoK) === 'PENDIENTE ASIGNACIÓN').length;
+    out.pendientesCerrar[area] = tareas.filter(r => norm(r.estadoR) === 'TERMINADA' && norm(r.estadoK) !== 'TERMINADA').length;
+  });
+
+  return out;
+}
+
+/* ============================================================
+   CONFIGURACIÓN DE FILTROS DINÁMICOS POR TARJETA
+   ============================================================ */
+const FAMILY_CONFIG = {
+  procesosActivos:    { dataset:'procesos', label:'Procesos activos',
+    pred:(r) => norm(r.estado) === 'ACTIVO' },
+  audiencias:         { dataset:'procesos', label:'Audiencias próximas',
+    pred:(r) => norm(r.estado) === 'ACTIVO' && r.audiencia !== null && r.audiencia !== '' },
+  sinTareas:          { dataset:'procesos', label:'Procesos sin tareas asignadas',
+    pred:(r) => {
+      if(norm(r.estado) !== 'ACTIVO') return false;
+      const v = r.tareasPendientes;
+      const num = (v === null || v === '') ? null : Number(v);
+      return num === 0;
+    } },
+  tareasArea:         { dataset:'tareas', label:'Tareas por área',
+    pred:(r, status) => {
+      if(norm(r.gestion) === 'GESTIONADA') return false;
+      if(!status) return true;
+      return (norm(r.estadoK) || '(SIN ESTADO)') === status;
+    } },
+  pendientesEjecutar: { dataset:'tareas', label:'Tareas pendientes de ejecutar',
+    pred:(r) => norm(r.gestion) === 'NO GESTIONADA' },
+  pendientesAsignar:  { dataset:'tareas', label:'Tareas pendientes de asignar',
+    pred:(r) => norm(r.estadoK) === 'PENDIENTE ASIGNACIÓN' },
+  pendientesCerrar:   { dataset:'tareas', label:'Tareas pendientes de cerrar',
+    pred:(r) => norm(r.estadoR) === 'TERMINADA' && norm(r.estadoK) !== 'TERMINADA' }
+};
+
+function toggleFiltro(family, area, status){
+  const areaKey = area || null;
+  const statusKey = status || null;
+  if(FILTRO_ACTIVO && FILTRO_ACTIVO.family === family && FILTRO_ACTIVO.area === areaKey && FILTRO_ACTIVO.status === statusKey){
+    FILTRO_ACTIVO = null; // clic sobre la misma tarjeta: quita el filtro
+  }else{
+    FILTRO_ACTIVO = { family, area: areaKey, status: statusKey };
+  }
+  refrescarVistaResumen();
+}
+
+function limpiarFiltro(){
+  FILTRO_ACTIVO = null;
+  refrescarVistaResumen();
+}
+
+function refrescarVistaResumen(){
+  if(!LAST_METRICAS) return;
+  renderResumenKpis(LAST_METRICAS);
+  renderResultados();
+}
+
+// Delegación de clics: cualquier tarjeta o fila de desglose con data-family
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-family]');
+  if(!el) return;
+  toggleFiltro(el.dataset.family, el.dataset.area, el.dataset.status);
+});
+
+/* ============================================================
+   RENDER: TARJETAS KPI
+   ============================================================ */
+function sumValues(obj){ return AREA_KEYS.reduce((a,k)=>a+(obj[k]||0),0); }
+
+function isCardSelected(family, area){
+  return !!FILTRO_ACTIVO && FILTRO_ACTIVO.family === family && FILTRO_ACTIVO.area === area && !FILTRO_ACTIVO.status;
+}
+
+function renderKpiSimple(containerId, valuesByArea, family){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  const total = sumValues(valuesByArea);
+  let html = '';
+  AREA_KEYS.forEach(area => {
+    const sel = isCardSelected(family, area) ? ' selected' : '';
+    html += `<div class="kpi-card${sel}" data-family="${family}" data-area="${area}">
+      <div class="kpi-label">${AREA_LABELS[area]}</div>
+      <div class="kpi-value">${valuesByArea[area] || 0}</div>
+    </div>`;
+  });
+  const selTotal = isCardSelected(family, null) ? ' selected' : '';
+  html += `<div class="kpi-card total${selTotal}" data-family="${family}" data-area="">
+    <div class="kpi-label">Total</div>
+    <div class="kpi-value">${total}</div>
+  </div>`;
+  el.innerHTML = html;
+}
+
+function renderKpiTareasArea(tareasArea){
+  const el = document.getElementById('kpiTareasArea');
+  if(!el) return;
+  const family = 'tareasArea';
+  const totalGeneral = AREA_KEYS.reduce((a,k)=>a+tareasArea[k].total,0);
+  const totalBreakdown = {};
+  AREA_KEYS.forEach(area => {
+    Object.entries(tareasArea[area].breakdown).forEach(([k,v]) => {
+      totalBreakdown[k] = (totalBreakdown[k] || 0) + v;
+    });
+  });
+
+  function isRowSelected(area, status){
+    return !!FILTRO_ACTIVO && FILTRO_ACTIVO.family === family && FILTRO_ACTIVO.area === area && FILTRO_ACTIVO.status === status;
+  }
+
+  function breakdownHtml(bd, area){
+    return Object.entries(bd).sort((a,b)=>b[1]-a[1]).map(([k,v]) => {
+      const sel = isRowSelected(area, k) ? ' selected' : '';
+      return `<div class="kpi-breakdown-row${sel}" data-family="${family}" data-area="${area || ''}" data-status="${k}"><span>${k}</span><b>${v}</b></div>`;
+    }).join('');
+  }
+
+  let html = '';
+  AREA_KEYS.forEach(area => {
+    const sel = isCardSelected(family, area) ? ' selected' : '';
+    html += `<div class="kpi-card${sel}" data-family="${family}" data-area="${area}">
+      <div class="kpi-label">${AREA_LABELS[area]}</div>
+      <div class="kpi-value">${tareasArea[area].total}</div>
+      <div class="kpi-breakdown">${breakdownHtml(tareasArea[area].breakdown, area)}</div>
+    </div>`;
+  });
+  const selTotal = isCardSelected(family, null) ? ' selected' : '';
+  html += `<div class="kpi-card total${selTotal}" data-family="${family}" data-area="">
+    <div class="kpi-label">Total</div>
+    <div class="kpi-value">${totalGeneral}</div>
+    <div class="kpi-breakdown">${breakdownHtml(totalBreakdown, null)}</div>
+  </div>`;
+  el.innerHTML = html;
+}
+
+function renderResumenKpis(m){
+  LAST_METRICAS = m;
+  renderKpiSimple('kpiProcesosActivos', m.procesosActivos, 'procesosActivos');
+  renderKpiTareasArea(m.tareasArea);
+  renderKpiSimple('kpiAudiencias', m.audiencias, 'audiencias');
+  renderKpiSimple('kpiSinTareas', m.sinTareas, 'sinTareas');
+  renderKpiSimple('kpiPendientesEjecutar', m.pendientesEjecutar, 'pendientesEjecutar');
+  renderKpiSimple('kpiPendientesAsignar', m.pendientesAsignar, 'pendientesAsignar');
+  renderKpiSimple('kpiPendientesCerrar', m.pendientesCerrar, 'pendientesCerrar');
+}
+
+/* ============================================================
+   RENDER: TABLA DE RESULTADOS (procesos o tareas, según filtro)
+   ============================================================ */
+const PROCESOS_COLUMNS = [
+  { key:'n', label:'N°' }, { key:'area', label:'Área' }, { key:'cliente', label:'Cliente' },
+  { key:'demandante', label:'Demandante' }, { key:'demandado', label:'Demandado' },
+  { key:'tematica', label:'Temática' }, { key:'radicado', label:'Radicado' },
+  { key:'apoderado', label:'Apoderado' }, { key:'carpeta', label:'N° Carpeta Interna' }
+];
+const TAREAS_COLUMNS = [
+  { key:'area', label:'Área' }, { key:'cliente', label:'Cliente' }, { key:'demandante', label:'Demandante' },
+  { key:'demandado', label:'Demandado' }, { key:'carpeta', label:'N° Carpeta Interna' },
+  { key:'descripcion', label:'Descripción tarea' }, { key:'abogado', label:'Abogado responsable' },
+  { key:'vencimiento', label:'Fecha vencimiento' }, { key:'gestion', label:'Gestión' },
+  { key:'estadoK', label:'Estado' }, { key:'estadoR', label:'Estado (cierre)' }
+];
+
+function fmtCell(v){
+  if(v === null || v === undefined) return '';
+  if(v instanceof Date) return fmtDateTime(v);
+  return v;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function uniqueSorted(rows, key){
+  const set = new Set();
+  rows.forEach(r => {
+    const v = r[key];
+    if(v !== null && v !== undefined && String(v).trim() !== '') set.add(String(v).trim());
+  });
+  return Array.from(set).sort((a,b) => a.localeCompare(b, 'es'));
+}
+
+function fillSelect(id, values, placeholder){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const anterior = el.value;
+  el.innerHTML = `<option value="">${placeholder}</option>` +
+    values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if(values.includes(anterior)) el.value = anterior;
+}
+
+function populateFiltrosConsolidado(){
+  const combinado = PROCESOS_ROWS.concat(TAREAS_ROWS);
+  fillSelect('filtroArea', ['Laboral','Ejecutivos','Corporativo'], 'Área: todas');
+  fillSelect('filtroCliente', uniqueSorted(combinado, 'cliente'), 'Cliente: todos');
+  fillSelect('filtroDemandante', uniqueSorted(combinado, 'demandante'), 'Demandante: todos');
+  fillSelect('filtroDemandado', uniqueSorted(combinado, 'demandado'), 'Demandado: todos');
+  fillSelect('filtroCarpeta', uniqueSorted(combinado, 'carpeta'), 'N° Carpeta Interna: todas');
+}
+
+function renderResultados(){
+  const filtroArea = document.getElementById('filtroArea').value;
+  const filtroCliente = document.getElementById('filtroCliente').value;
+  const filtroDemandante = document.getElementById('filtroDemandante').value;
+  const filtroDemandado = document.getElementById('filtroDemandado').value;
+  const filtroCarpeta = document.getElementById('filtroCarpeta').value;
+
+  const cfg = FILTRO_ACTIVO ? FAMILY_CONFIG[FILTRO_ACTIVO.family] : null;
+  const esDatasetTareas = cfg && cfg.dataset === 'tareas';
+  const columns = esDatasetTareas ? TAREAS_COLUMNS : PROCESOS_COLUMNS;
+  const baseRows = esDatasetTareas ? TAREAS_ROWS : PROCESOS_ROWS;
+
+  const filtradas = baseRows.filter(r => {
+    if(filtroArea && r.area !== filtroArea) return false;
+    if(filtroCliente && norm(r.cliente) !== norm(filtroCliente)) return false;
+    if(filtroDemandante && norm(r.demandante) !== norm(filtroDemandante)) return false;
+    if(filtroDemandado && norm(r.demandado) !== norm(filtroDemandado)) return false;
+    if(filtroCarpeta && norm(r.carpeta) !== norm(filtroCarpeta)) return false;
+    if(cfg){
+      if(FILTRO_ACTIVO.area && r.areaKey !== FILTRO_ACTIVO.area) return false;
+      if(!cfg.pred(r, FILTRO_ACTIVO.status)) return false;
+    }
+    return true;
+  });
+
+  const tituloEl = document.getElementById('resultadosTitulo');
+  const chipWrap = document.getElementById('filterChipWrap');
+  const chip = document.getElementById('filterChip');
+  if(cfg){
+    let txt = cfg.label;
+    if(FILTRO_ACTIVO.area) txt += ` — ${AREA_LABELS[FILTRO_ACTIVO.area]}`;
+    if(FILTRO_ACTIVO.status) txt += ` — ${FILTRO_ACTIVO.status}`;
+    tituloEl.textContent = esDatasetTareas ? 'Tareas filtradas' : 'Procesos filtrados';
+    chip.textContent = txt;
+    chipWrap.style.display = 'flex';
+  }else{
+    tituloEl.textContent = 'Consolidado de procesos';
+    chipWrap.style.display = 'none';
+  }
+
+  document.getElementById('resumenCount').textContent =
+    `${filtradas.length} de ${baseRows.length} ${esDatasetTareas ? 'tareas' : 'procesos'}`;
+
+  const thead = document.getElementById('resumenThead');
+  thead.innerHTML = '<tr>' + columns.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
+
+  const tbody = document.getElementById('resumenTbody');
+  if(filtradas.length === 0){
+    tbody.innerHTML = `<tr><td colspan="${columns.length}"><div class="empty-state">No hay resultados que coincidan con el filtro.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtradas.map(r =>
+    '<tr>' + columns.map(c => `<td>${fmtCell(r[c.key])}</td>`).join('') + '</tr>'
+  ).join('');
+}
+
+/* ============================================================
+   PROCESAMIENTO DEL ARCHIVO CARGADO
+   ============================================================ */
+function procesarArrayBuffer(arrayBuffer){
+  const t0 = performance.now();
+
+  // Lista de nombres de hoja que realmente necesitamos (los demás se ignoran
+  // por completo para no perder tiempo parseando hojas de 50MB que no usamos).
+  const nombresNecesarios = [];
+  AREA_KEYS.forEach(area => {
+    nombresNecesarios.push(AREA_SHEETS[area].main, AREA_SHEETS[area].tasks);
+  });
+
+  // Paso 1: lectura ultra rápida SOLO de los nombres de hoja (sin celdas),
+  // para poder resolver coincidencias exactas (algunas hojas del archivo
+  // real tienen espacios de más al final del nombre).
+  const wbNombres = XLSX.read(arrayBuffer, { type:'array', bookSheets:true });
+  const hojasReales = nombresNecesarios
+    .map(n => findSheetName(wbNombres, n))
+    .filter(Boolean);
+
+  if(hojasReales.length === 0){
+    throw new Error('No se encontraron las hojas esperadas (LABORAL, EJECUTIVOS, CORPORATIVO, TAREAS...) en el archivo cargado.');
+  }
+
+  // Paso 2: lectura completa, pero limitada SOLO a esas hojas. Esto evita
+  // que el navegador procese las otras ~18 hojas del libro (auditorías,
+  // listas, hojas antiguas, etc.) y reduce drásticamente el tiempo de carga.
+  const wb = XLSX.read(arrayBuffer, {
+    type:'array',
+    cellDates:true,
+    cellStyles:false,
+    cellHTML:false,
+    sheets: hojasReales
+  });
+
+  DATA = {};
+  AREA_KEYS.forEach(area => {
+    DATA[area] = {
+      main: sheetToRows(wb, AREA_SHEETS[area].main),
+      tasks: sheetToRows(wb, AREA_SHEETS[area].tasks)
+    };
+  });
+
+  PROCESOS_ROWS = buildProcesosRows();
+  TAREAS_ROWS = buildTareasRows();
+  populateFiltrosConsolidado();
+
+  const metricas = calcularMetricas();
+  renderResumenKpis(metricas);
+
+  FILTRO_ACTIVO = null;
+  renderResultados();
+
+  document.getElementById('btnGuardar').disabled = false;
+  document.getElementById('btnGuardar').title = '';
+  setLastUpdated(new Date());
+
+  const segundos = ((performance.now() - t0) / 1000).toFixed(1);
+  console.log(`Archivo procesado en ${segundos}s`);
+}
+
+function setLastUpdated(date){
+  const el = document.getElementById('lastUpdated');
+  el.textContent = date ? `Última actualización: ${fmtDateTime(date)}` : '';
+}
+
+/* ============================================================
+   EVENTOS: CARGA MANUAL
+   ============================================================ */
+const fileInput = document.getElementById('fileInput');
+const btnActualizar = document.getElementById('btnActualizar');
+const uploadStatus = document.getElementById('uploadStatus');
+
+// Filtros de la tabla de resultados (búsqueda libre + selector de área)
+// Filtros individuales de la tabla de resultados (Área / Cliente / Demandante / Demandado / N° Carpeta Interna)
+['filtroArea','filtroCliente','filtroDemandante','filtroDemandado','filtroCarpeta'].forEach(id => {
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('change', renderResultados);
+});
+document.getElementById('btnQuitarFiltro').addEventListener('click', limpiarFiltro);
+
+btnActualizar.addEventListener('click', () => {
+  const file = fileInput.files && fileInput.files[0];
+  if(!file){
+    uploadStatus.textContent = 'Selecciona primero un archivo .xlsx';
+    uploadStatus.className = 'upload-status err';
+    return;
+  }
+
+  btnActualizar.disabled = true;
+  uploadStatus.textContent = `Leyendo "${file.name}" (${(file.size/1024/1024).toFixed(1)} MB)...`;
+  uploadStatus.className = 'upload-status';
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    // Se deja pasar un frame para que el navegador pinte el mensaje de
+    // "Procesando..." ANTES de bloquear el hilo principal con el parseo.
+    uploadStatus.textContent = 'Procesando datos, un momento...';
+    setTimeout(() => {
+      try{
+        procesarArrayBuffer(e.target.result);
+        uploadStatus.textContent = `Datos actualizados desde "${file.name}".`;
+        uploadStatus.className = 'upload-status ok';
+      }catch(err){
+        uploadStatus.textContent = 'Error al procesar el archivo: ' + err.message;
+        uploadStatus.className = 'upload-status err';
+        console.error(err);
+      }finally{
+        btnActualizar.disabled = false;
+      }
+    }, 30);
+  };
+  reader.onerror = () => {
+    uploadStatus.textContent = 'No se pudo leer el archivo.';
+    uploadStatus.className = 'upload-status err';
+    btnActualizar.disabled = false;
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+document.getElementById('btnGuardar').addEventListener('click', async () => {
+  try{
+    const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+    const blob = new Blob([html], { type:'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'dashboard_litigios_actualizado.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    uploadStatus.textContent = 'HTML actualizado descargado.';
+    uploadStatus.className = 'upload-status ok';
+  }catch(err){
+    uploadStatus.textContent = 'No se pudo generar el archivo: ' + err.message;
+    uploadStatus.className = 'upload-status err';
+  }
+});
+
+/* ============================================================
+   SINCRONIZACIÓN AUTOMÁTICA CON EL EXCEL EN SHAREPOINT/ONEDRIVE
+   ============================================================
+   ⚠️ PENDIENTE DE COMPLETAR — reemplaza estos 5 valores cuando los
+   tengas (ver guía paso a paso):
+     1. clientId        → Azure AD → registro de la app → Overview
+     2. tenantId         → Azure AD → registro de la app → Overview
+     3. driveId          → Graph Explorer sobre el nuevo Excel
+     4. itemId           → Graph Explorer sobre el nuevo Excel
+     5. redirectUri       → URL final de GitHub Pages de este dashboard
+   Mientras tanto, el dashboard funciona con la carga manual de arriba.
+   ============================================================ */
+const GRAPH_CONFIG = {
+  clientId:  'PENDIENTE_CLIENT_ID',
+  tenantId:  'PENDIENTE_TENANT_ID',
+  driveId:   'PENDIENTE_DRIVE_ID',
+  itemId:    'PENDIENTE_ITEM_ID',
+  redirectUri: 'PENDIENTE_URL_GITHUB_PAGES',
+  refreshMinutes: 30
+};
+
+let msalInstance = null;
+let graphAccount = null;
+
+function graphConfigured(){
+  return !Object.values(GRAPH_CONFIG).some(v => typeof v === 'string' && v.startsWith('PENDIENTE_'));
+}
+
+async function initMsal(){
+  if(!graphConfigured()){
+    setGraphStatus('Conexión con Microsoft 365 pendiente de configurar (ver comentario GRAPH_CONFIG en el código).', false);
+    return;
+  }
+  if(typeof msal === 'undefined') return;
+
+  msalInstance = new msal.PublicClientApplication({
+    auth:{
+      clientId: GRAPH_CONFIG.clientId,
+      authority: 'https://login.microsoftonline.com/' + GRAPH_CONFIG.tenantId,
+      redirectUri: GRAPH_CONFIG.redirectUri
+    },
+    cache:{ cacheLocation:'localStorage' }
+  });
+
+  await msalInstance.initialize();
+  const cuentas = msalInstance.getAllAccounts();
+  if(cuentas.length > 0){
+    graphAccount = cuentas[0];
+    await sincronizarDesdeGraph();
+    programarRefrescoAutomatico();
+    setGraphStatus('Conectado como ' + graphAccount.username, false);
+  }
+}
+
+function setGraphStatus(msg, esError){
+  const el = document.getElementById('graphStatus');
+  if(!el) return;
+  el.textContent = msg;
+  el.className = 'upload-status' + (esError ? ' err' : ' ok');
+}
+
+function programarRefrescoAutomatico(){
+  if(window._autoRefreshStarted) return;
+  window._autoRefreshStarted = true;
+  setInterval(sincronizarDesdeGraph, GRAPH_CONFIG.refreshMinutes * 60 * 1000);
+}
+
+async function iniciarSesionYSincronizar(){
+  if(!graphConfigured()){
+    setGraphStatus('Aún falta completar GRAPH_CONFIG (clientId, tenantId, driveId, itemId, redirectUri).', true);
+    return;
+  }
+  const btn = document.getElementById('btnConectar');
+  try{
+    if(btn) btn.disabled = true;
+    setGraphStatus('Conectando con Microsoft 365...', false);
+    if(!msalInstance) await initMsal();
+    const loginResp = await msalInstance.loginPopup({ scopes:['Files.Read'] });
+    graphAccount = loginResp.account;
+    await sincronizarDesdeGraph();
+    programarRefrescoAutomatico();
+  }catch(err){
+    setGraphStatus('Error al conectar: ' + err.message, true);
+  }finally{
+    if(btn) btn.disabled = false;
+  }
+}
+
+async function obtenerTokenSilencioso(){
+  const req = { scopes:['Files.Read'], account: graphAccount };
+  try{
+    const r = await msalInstance.acquireTokenSilent(req);
+    return r.accessToken;
+  }catch(e){
+    const r = await msalInstance.acquireTokenPopup(req);
+    return r.accessToken;
+  }
+}
+
+async function sincronizarDesdeGraph(){
+  try{
+    const token = await obtenerTokenSilencioso();
+    const url = `https://graph.microsoft.com/v1.0/drives/${GRAPH_CONFIG.driveId}/items/${GRAPH_CONFIG.itemId}/content`;
+    const fileResp = await fetch(url, { headers:{ Authorization: 'Bearer ' + token } });
+    if(!fileResp.ok) throw new Error('No se pudo descargar el Excel (revisa driveId/itemId y permisos).');
+    const arrayBuffer = await fileResp.arrayBuffer();
+    procesarArrayBuffer(arrayBuffer);
+    setGraphStatus('Conectado. Última sincronización automática: ' + fmtDateTime(new Date()) + '.', false);
+  }catch(err){
+    setGraphStatus('Error al sincronizar: ' + err.message, true);
+    console.error(err);
+  }
+}
+
+const _btnConectar = document.getElementById('btnConectar');
+if(_btnConectar) _btnConectar.addEventListener('click', iniciarSesionYSincronizar);
+window.addEventListener('load', async () => { await initMsal(); });
+
+/* ---------- inicio ----------
+   Sin datos precargados: el tablero arranca vacío y solo se llena
+   cuando el usuario carga el archivo o se conecta a Microsoft 365. */
+renderResultados();
+setLastUpdated(null);
+</script>
+</body>
+</html>
