@@ -925,12 +925,12 @@ function renderAgenda(){
   const clienteSel = document.getElementById('agendaCliente').value;
   const hoy = hoyFecha();
 
-  // Igual que en "Términos": solo tareas de PRIORIDAD = 1 (columna M).
-  // A diferencia de "Términos", aquí NO se filtra por GESTIÓN (columna P):
-  // se muestran tanto las gestionadas como las no gestionadas, ya que el
-  // objetivo de la agenda es ver todo lo prioritario del abogado día a día.
+  // A diferencia de "Términos" (que exige PRIORIDAD=1 y GESTIÓN=NO GESTIONADA),
+  // aquí se muestran TODAS las tareas cuya GESTIÓN (columna P) sea
+  // "NO GESTIONADA", sin importar su prioridad — es la agenda completa
+  // del abogado, no solo lo más urgente.
   const base = TAREAS_ROWS.filter(r => {
-    if(Number(r.prioridad) !== 1) return false;
+    if(norm(r.gestion) !== 'NO GESTIONADA') return false;
     if(abogadoSel && norm(r.abogado) !== norm(abogadoSel)) return false;
     if(clienteSel && norm(r.cliente) !== norm(clienteSel)) return false;
     return true;
