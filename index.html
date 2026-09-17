@@ -68,6 +68,18 @@
 
   h2.section-title{font-size:1rem; font-weight:800; margin:28px 0 10px; color:var(--texto);}
   h2.section-title:first-child{margin-top:0;}
+
+  /* ---- Navegación entre hojas ---- */
+  .view-tabs{display:flex; gap:6px; margin:18px 0 16px; flex-wrap:wrap;}
+  .view-tab{
+    border:1px solid var(--borde); background:#fff; color:var(--gris);
+    padding:9px 18px; border-radius:9px; font-size:.85rem; font-weight:700;
+    cursor:pointer;
+  }
+  .view-tab:hover{border-color:var(--oliva);}
+  .view-tab.active{background:var(--oliva); color:#fff; border-color:var(--oliva);}
+  .view-pane{display:none;}
+  .view-pane.active{display:block;}
   .section-hint{font-size:.76rem; color:var(--gris); margin:-6px 0 12px;}
 
   /* ---- Tarjetas KPI ---- */
@@ -122,6 +134,55 @@
   .row-count{font-size:.76rem; color:var(--gris); margin:6px 2px 14px;}
 
   .empty-state{padding:40px 20px; text-align:center; color:var(--gris); font-size:.9rem;}
+
+  /* ---- Calendario / Agenda ---- */
+  .calendar-toolbar{display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;}
+  .calendar-toolbar select{padding:8px 10px; border-radius:8px; border:1px solid var(--borde); font-size:.83rem;}
+  .calendar-toolbar label{font-size:.83rem; color:var(--texto); display:flex; align-items:center; gap:6px; cursor:pointer;}
+  .calendar-nav{display:flex; align-items:center; gap:8px; margin-left:auto;}
+  .calendar-nav button{border:1px solid var(--borde); background:#fff; border-radius:8px; padding:7px 14px; cursor:pointer; font-weight:700; font-size:.85rem;}
+  .calendar-nav button:hover{border-color:var(--oliva);}
+  .calendar-month-label{font-weight:800; min-width:170px; text-align:center; text-transform:capitalize;}
+
+  .calendar-layout{display:flex; gap:14px; align-items:flex-start;}
+  .vencidas-col{
+    flex:0 0 240px; background:var(--card); border:1px solid var(--borde); border-radius:12px;
+    padding:12px; max-height:660px; overflow:auto;
+  }
+  .vencidas-col h3{margin:0 0 10px; font-size:.78rem; text-transform:uppercase; letter-spacing:.3px; color:var(--rojo);}
+  .calendar-main{flex:1; min-width:0;}
+  .calendar-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
+  .calendar-weekday{font-size:.72rem; font-weight:700; color:var(--gris); text-align:center; padding:4px 0;}
+  .calendar-day{
+    background:var(--card); border:1px solid var(--borde); border-radius:10px; min-height:112px;
+    padding:6px; font-size:.72rem; display:flex; flex-direction:column; gap:4px; overflow:auto;
+  }
+  .calendar-day.outside{background:#f7f7f5;}
+  .calendar-day.outside .day-num{color:#bbb;}
+  .calendar-day .day-num{font-weight:800; font-size:.78rem; color:var(--texto);}
+  .calendar-day.today{border-color:var(--oliva); border-width:2px;}
+  .calendar-day.today .day-num{color:var(--oliva);}
+
+  .task-chip{
+    border-radius:6px; padding:4px 6px; font-size:.68rem; line-height:1.3; cursor:default;
+  }
+  .task-chip + .task-chip{ margin-top:2px; }
+  .task-chip.c-rojo{background:var(--rojo-bg); color:var(--rojo);}
+  .task-chip.c-naranja{background:#fde3c8; color:#b5620c;}
+  .task-chip.c-azul{background:var(--azul-bg); color:var(--azul);}
+  .task-chip.c-amarillo{background:#fdf2c8; color:#8a6d00;}
+  .task-chip.c-verde{background:var(--verde-bg); color:var(--verde);}
+  .task-chip.c-gris{background:#eee; color:var(--gris);}
+
+  .agenda-grid{display:grid; grid-template-columns:repeat(6,1fr); gap:10px;}
+  .agenda-col{background:var(--card); border:1px solid var(--borde); border-radius:12px; padding:10px; min-height:420px; max-height:640px; overflow:auto;}
+  .agenda-col h3{margin:0 0 10px; font-size:.76rem; text-transform:uppercase; letter-spacing:.3px; color:var(--gris); text-align:center;}
+  .agenda-col.vencidas h3{color:var(--rojo);}
+  @media (max-width:1100px){
+    .agenda-grid{grid-template-columns:repeat(3,1fr);}
+    .calendar-layout{flex-direction:column;}
+    .vencidas-col{flex:0 0 auto; max-height:260px; width:100%;}
+  }
 </style>
 </head>
 <body>
@@ -150,8 +211,15 @@
     <div class="last-updated" id="lastUpdated"></div>
   </div>
 
-  <!-- ================= HOJA ÚNICA: RESUMEN ================= -->
-  <div id="pane-resumen">
+  <!-- Navegación entre hojas -->
+  <div class="view-tabs">
+    <button class="view-tab active" data-view="resumen" type="button">Resumen</button>
+    <button class="view-tab" data-view="calendario" type="button">Calendario</button>
+    <button class="view-tab" data-view="agenda" type="button">Agenda</button>
+  </div>
+
+  <!-- ================= HOJA: RESUMEN ================= -->
+  <div class="view-pane active" id="pane-resumen">
     <h2 class="section-title">Procesos activos</h2>
     <div class="kpi-row" id="kpiProcesosActivos"></div>
 
@@ -194,6 +262,45 @@
     </div>
   </div>
 
+  <!-- ================= HOJA: CALENDARIO ================= -->
+  <div class="view-pane" id="pane-calendario">
+    <h2 class="section-title">Calendario de tareas urgentes</h2>
+    <div class="calendar-toolbar">
+      <select id="calArea">
+        <option value="">Área: todas</option>
+        <option value="Laboral">Laboral</option>
+        <option value="Ejecutivos">Ejecutivos</option>
+        <option value="Corporativo">Corporativo</option>
+      </select>
+      <label><input type="checkbox" id="calSoloAudiencias"> Solo audiencias</label>
+      <div class="calendar-nav">
+        <button id="calPrev" type="button">◀</button>
+        <span class="calendar-month-label" id="calMonthLabel"></span>
+        <button id="calHoy" type="button">Hoy</button>
+        <button id="calNext" type="button">▶</button>
+      </div>
+    </div>
+    <div class="calendar-layout">
+      <div class="vencidas-col">
+        <h3>Vencidas</h3>
+        <div id="calVencidasList"></div>
+      </div>
+      <div class="calendar-main">
+        <div class="calendar-grid" id="calWeekdays"></div>
+        <div class="calendar-grid" id="calGrid" style="margin-top:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= HOJA: AGENDA ================= -->
+  <div class="view-pane" id="pane-agenda">
+    <h2 class="section-title">Agenda por abogado</h2>
+    <div class="calendar-toolbar">
+      <select id="agendaAbogado"><option value="">Abogado: todos</option></select>
+    </div>
+    <div class="agenda-grid" id="agendaGrid"></div>
+  </div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -222,7 +329,7 @@ const AREA_COLS = {
 };
 
 // Columnas (letras de Excel) de las hojas de tareas (mismo esquema en las 3)
-const TASK_COLS = { numeroProceso:'A', gestion:'P', estadoK:'K', estadoR:'R', descripcion:'B', abogado:'C', vencimiento:'D', cliente:'G' };
+const TASK_COLS = { numeroProceso:'A', gestion:'P', estadoK:'K', estadoR:'R', descripcion:'B', abogado:'C', vencimiento:'D', cliente:'G', prioridad:'M', asignacion:'O' };
 
 const AREA_LABELS = { LABORAL:'Laboral', EJECUTIVOS:'Ejecutivos', CORPORATIVO:'Corporativo' };
 const AREA_KEYS = ['LABORAL','EJECUTIVOS','CORPORATIVO'];
@@ -334,7 +441,9 @@ function buildTareasRows(){
         vencimiento: cell(r, TASK_COLS.vencimiento),
         gestion: cell(r, TASK_COLS.gestion),
         estadoK: cell(r, TASK_COLS.estadoK),
-        estadoR: cell(r, TASK_COLS.estadoR)
+        estadoR: cell(r, TASK_COLS.estadoR),
+        prioridad: cell(r, TASK_COLS.prioridad),
+        asignacion: cell(r, TASK_COLS.asignacion)
       });
     });
   });
@@ -631,6 +740,164 @@ function renderResultados(){
 }
 
 /* ============================================================
+   CALENDARIO Y AGENDA — utilidades comunes
+   ============================================================ */
+function soloFecha(d){
+  if(!(d instanceof Date) || isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function hoyFecha(){ return soloFecha(new Date()); }
+function claveFecha(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+
+// Reglas de color (en orden de prioridad; la primera que coincida gana).
+// "Audiencia" va primero: son las tareas que más requieren identificarse
+// a simple vista, incluso si además cumplen otra regla (p. ej. "1 |" o
+// "TERMINADA"). Las tareas ubicadas en la columna "Vencidas" siempre se
+// pintan de rojo sin importar su contenido — eso se resuelve en cada
+// función de render, no aquí.
+function colorPorTexto(texto){
+  const t = String(texto || '').toUpperCase();
+  if(t.includes('AUDIENCIA')) return 'naranja';
+  if(t.includes('1 |')) return 'azul';
+  if(t.includes('EN REVISIÓN')) return 'amarillo';
+  if(t.includes('TERMINADA')) return 'verde';
+  return 'gris';
+}
+
+/* ============================================================
+   HOJA: CALENDARIO
+   ============================================================ */
+let calMonthCursor = hoyFecha();
+
+function calcularBaseCalendario(){
+  const areaSel = document.getElementById('calArea').value;
+  const soloAudiencias = document.getElementById('calSoloAudiencias').checked;
+  return TAREAS_ROWS.filter(r => {
+    if(norm(r.gestion) !== 'NO GESTIONADA') return false;
+    if(Number(r.prioridad) !== 1) return false;
+    if(areaSel && r.area !== areaSel) return false;
+    if(soloAudiencias){
+      const texto = norm((r.asignacion || '') + ' ' + (r.descripcion || ''));
+      if(!texto.includes('AUDIENCIA')) return false;
+    }
+    return true;
+  });
+}
+
+function renderCalendario(){
+  const base = calcularBaseCalendario();
+  const hoy = hoyFecha();
+
+  // Columna de "Vencidas": independiente del mes que se esté navegando.
+  const vencidas = base
+    .filter(r => { const f = soloFecha(r.vencimiento); return f && f.getTime() < hoy.getTime(); })
+    .sort((a,b) => soloFecha(a.vencimiento) - soloFecha(b.vencimiento));
+
+  const vencidasList = document.getElementById('calVencidasList');
+  vencidasList.innerHTML = vencidas.length === 0
+    ? '<div class="empty-state" style="padding:14px 4px; font-size:.74rem;">Sin tareas vencidas.</div>'
+    : vencidas.map(r => {
+        const texto = `${r.asignacion || ''} — ${r.abogado || ''}`;
+        return `<div class="task-chip c-rojo" title="${escapeHtml(texto)}">${escapeHtml(texto)}</div>`;
+      }).join('');
+
+  // Encabezado del mes visible
+  const nombreMes = calMonthCursor.toLocaleDateString('es-CO', { month:'long', year:'numeric' });
+  document.getElementById('calMonthLabel').textContent = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+  document.getElementById('calWeekdays').innerHTML =
+    ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d => `<div class="calendar-weekday">${d}</div>`).join('');
+
+  // Rango de la grilla (completa semanas antes/después del mes)
+  const year = calMonthCursor.getFullYear();
+  const month = calMonthCursor.getMonth();
+  const primerDia = new Date(year, month, 1);
+  const ultimoDia = new Date(year, month + 1, 0);
+  const inicioGrid = new Date(primerDia); inicioGrid.setDate(inicioGrid.getDate() - primerDia.getDay());
+  const finGrid = new Date(ultimoDia); finGrid.setDate(finGrid.getDate() + (6 - ultimoDia.getDay()));
+
+  // Tareas NO vencidas, agrupadas por fecha (esas ya se muestran en "Vencidas")
+  const porFecha = {};
+  base.forEach(r => {
+    const f = soloFecha(r.vencimiento);
+    if(!f || f.getTime() < hoy.getTime()) return;
+    (porFecha[claveFecha(f)] = porFecha[claveFecha(f)] || []).push(r);
+  });
+
+  const celdas = [];
+  const cursor = new Date(inicioGrid);
+  while(cursor <= finGrid){
+    const key = claveFecha(cursor);
+    const esDelMes = cursor.getMonth() === month;
+    const esHoy = cursor.getTime() === hoy.getTime();
+    const tareasDia = porFecha[key] || [];
+    const chips = tareasDia.map(r => {
+      const texto = `${r.asignacion || ''} — ${r.abogado || ''}`;
+      return `<div class="task-chip c-${colorPorTexto(texto)}" title="${escapeHtml(texto)}">${escapeHtml(texto)}</div>`;
+    }).join('');
+    celdas.push(`<div class="calendar-day${esDelMes ? '' : ' outside'}${esHoy ? ' today' : ''}">
+      <div class="day-num">${cursor.getDate()}</div>
+      ${chips}
+    </div>`);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  document.getElementById('calGrid').innerHTML = celdas.join('');
+}
+
+document.getElementById('calPrev').addEventListener('click', () => {
+  calMonthCursor = new Date(calMonthCursor.getFullYear(), calMonthCursor.getMonth() - 1, 1);
+  renderCalendario();
+});
+document.getElementById('calNext').addEventListener('click', () => {
+  calMonthCursor = new Date(calMonthCursor.getFullYear(), calMonthCursor.getMonth() + 1, 1);
+  renderCalendario();
+});
+document.getElementById('calHoy').addEventListener('click', () => {
+  calMonthCursor = hoyFecha();
+  renderCalendario();
+});
+document.getElementById('calArea').addEventListener('change', renderCalendario);
+document.getElementById('calSoloAudiencias').addEventListener('change', renderCalendario);
+
+/* ============================================================
+   HOJA: AGENDA (por abogado responsable)
+   ============================================================ */
+function populateAgendaAbogado(){
+  fillSelect('agendaAbogado', uniqueSorted(TAREAS_ROWS, 'abogado'), 'Abogado: todos');
+}
+
+function renderAgenda(){
+  const abogadoSel = document.getElementById('agendaAbogado').value;
+  const hoy = hoyFecha();
+
+  const base = TAREAS_ROWS.filter(r => !abogadoSel || norm(r.abogado) === norm(abogadoSel));
+
+  const vencidas = base.filter(r => { const f = soloFecha(r.vencimiento); return f && f.getTime() < hoy.getTime(); });
+
+  const columnas = [{ label:'Vencidas', esVencidas:true, tareas: vencidas }];
+  for(let i = 0; i < 5; i++){
+    const d = new Date(hoy); d.setDate(d.getDate() + i);
+    const key = claveFecha(d);
+    const tareas = base.filter(r => { const f = soloFecha(r.vencimiento); return f && claveFecha(f) === key; });
+    const label = i === 0 ? 'Hoy' : d.toLocaleDateString('es-CO', { weekday:'short', day:'2-digit', month:'2-digit' });
+    columnas.push({ label, esVencidas:false, tareas });
+  }
+
+  document.getElementById('agendaGrid').innerHTML = columnas.map(col => {
+    const items = col.tareas.map(r => {
+      const texto = r.asignacion || '';
+      const color = col.esVencidas ? 'rojo' : colorPorTexto(texto);
+      return `<div class="task-chip c-${color}" title="${escapeHtml(texto)}">${escapeHtml(texto)}</div>`;
+    }).join('') || '<div class="empty-state" style="padding:10px 4px; font-size:.72rem;">Sin tareas.</div>';
+    return `<div class="agenda-col${col.esVencidas ? ' vencidas' : ''}">
+      <h3>${col.label}</h3>
+      ${items}
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('agendaAbogado').addEventListener('change', renderAgenda);
+
+/* ============================================================
    PROCESAMIENTO DEL ARCHIVO CARGADO
    ============================================================ */
 function procesarArrayBuffer(arrayBuffer){
@@ -677,12 +944,15 @@ function procesarArrayBuffer(arrayBuffer){
   PROCESOS_ROWS = buildProcesosRows();
   TAREAS_ROWS = buildTareasRows();
   populateFiltrosConsolidado();
+  populateAgendaAbogado();
 
   const metricas = calcularMetricas();
   renderResumenKpis(metricas);
 
   FILTRO_ACTIVO = null;
   renderResultados();
+  renderCalendario();
+  renderAgenda();
 
   document.getElementById('btnGuardar').disabled = false;
   document.getElementById('btnGuardar').title = '';
@@ -768,6 +1038,18 @@ document.getElementById('btnGuardar').addEventListener('click', async () => {
     uploadStatus.textContent = 'No se pudo generar el archivo: ' + err.message;
     uploadStatus.className = 'upload-status err';
   }
+});
+
+/* ============================================================
+   NAVEGACIÓN ENTRE HOJAS
+   ============================================================ */
+document.querySelectorAll('.view-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('pane-' + tab.dataset.view).classList.add('active');
+  });
 });
 
 /* ============================================================
@@ -892,6 +1174,8 @@ window.addEventListener('load', async () => { await initMsal(); });
    Sin datos precargados: el tablero arranca vacío y solo se llena
    cuando el usuario carga el archivo o se conecta a Microsoft 365. */
 renderResultados();
+renderCalendario();
+renderAgenda();
 setLastUpdated(null);
 </script>
 </body>
