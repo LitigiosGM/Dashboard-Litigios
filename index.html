@@ -66,7 +66,7 @@
   .upload-status.err{color:#b3261e; font-weight:600;}
   .last-updated{flex-basis:100%; font-size:.75rem; color:var(--gris); margin-top:2px;}
 
-  h2.section-title{font-size:1rem; font-weight:800; margin:28px 0 10px; color:var(--texto);}
+  h2.section-title{font-size:.92rem; font-weight:800; margin:20px 0 8px; color:var(--texto);}
   h2.section-title:first-child{margin-top:0;}
 
   /* ---- Navegación entre hojas ---- */
@@ -83,19 +83,19 @@
   .section-hint{font-size:.76rem; color:var(--gris); margin:-6px 0 12px;}
 
   /* ---- Tarjetas KPI ---- */
-  .kpi-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:6px;}
+  .kpi-row{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:4px;}
   .kpi-card{
-    background:var(--card); border:1px solid var(--borde); border-radius:14px;
-    padding:16px 14px; text-align:center; border-top:4px solid var(--gris);
+    background:var(--card); border:1px solid var(--borde); border-radius:12px;
+    padding:11px 10px; text-align:center; border-top:3px solid var(--gris);
     cursor:pointer; transition:box-shadow .15s ease, transform .1s ease; user-select:none;
   }
   .kpi-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.1);}
   .kpi-card.selected{outline:2px solid var(--oliva); box-shadow:0 0 0 4px rgba(170,183,32,.22);}
   .kpi-card.total{border-top-color:var(--oliva); background:#fbfbf2;}
-  .kpi-card .kpi-label{font-size:.72rem; text-transform:uppercase; letter-spacing:.3px; color:var(--gris); font-weight:700;}
-  .kpi-card .kpi-value{font-size:1.9rem; font-weight:800; margin:6px 0 2px; color:var(--texto);}
-  .kpi-card .kpi-breakdown{margin-top:8px; border-top:1px dashed var(--borde); padding-top:8px; text-align:left;}
-  .kpi-breakdown-row{display:flex; justify-content:space-between; font-size:.74rem; color:var(--gris); padding:3px 4px; border-radius:5px; cursor:pointer;}
+  .kpi-card .kpi-label{font-size:.66rem; text-transform:uppercase; letter-spacing:.3px; color:var(--gris); font-weight:700;}
+  .kpi-card .kpi-value{font-size:1.3rem; font-weight:800; margin:3px 0 1px; color:var(--texto);}
+  .kpi-card .kpi-breakdown{margin-top:6px; border-top:1px dashed var(--borde); padding-top:6px; text-align:left;}
+  .kpi-breakdown-row{display:flex; justify-content:space-between; font-size:.68rem; color:var(--gris); padding:2px 4px; border-radius:5px; cursor:pointer;}
   .kpi-breakdown-row:hover{background:#f4f6e6;}
   .kpi-breakdown-row.selected{background:var(--oliva); color:#fff;}
   .kpi-breakdown-row.selected b{color:#fff;}
@@ -272,6 +272,7 @@
         <option value="Ejecutivos">Ejecutivos</option>
         <option value="Corporativo">Corporativo</option>
       </select>
+      <select id="calCliente"><option value="">Cliente: todos</option></select>
       <label><input type="checkbox" id="calSoloAudiencias"> Solo audiencias</label>
       <div class="calendar-nav">
         <button id="calPrev" type="button">◀</button>
@@ -297,6 +298,7 @@
     <h2 class="section-title">Agenda por abogado</h2>
     <div class="calendar-toolbar">
       <select id="agendaAbogado"><option value="">Abogado: todos</option></select>
+      <select id="agendaCliente"><option value="">Cliente: todos</option></select>
     </div>
     <div class="agenda-grid" id="agendaGrid"></div>
   </div>
@@ -771,11 +773,13 @@ let calMonthCursor = hoyFecha();
 
 function calcularBaseCalendario(){
   const areaSel = document.getElementById('calArea').value;
+  const clienteSel = document.getElementById('calCliente').value;
   const soloAudiencias = document.getElementById('calSoloAudiencias').checked;
   return TAREAS_ROWS.filter(r => {
     if(norm(r.gestion) !== 'NO GESTIONADA') return false;
     if(Number(r.prioridad) !== 1) return false;
     if(areaSel && r.area !== areaSel) return false;
+    if(clienteSel && norm(r.cliente) !== norm(clienteSel)) return false;
     if(soloAudiencias){
       const texto = norm((r.asignacion || '') + ' ' + (r.descripcion || ''));
       if(!texto.includes('AUDIENCIA')) return false;
@@ -856,6 +860,7 @@ document.getElementById('calHoy').addEventListener('click', () => {
   renderCalendario();
 });
 document.getElementById('calArea').addEventListener('change', renderCalendario);
+document.getElementById('calCliente').addEventListener('change', renderCalendario);
 document.getElementById('calSoloAudiencias').addEventListener('change', renderCalendario);
 
 /* ============================================================
@@ -865,11 +870,22 @@ function populateAgendaAbogado(){
   fillSelect('agendaAbogado', uniqueSorted(TAREAS_ROWS, 'abogado'), 'Abogado: todos');
 }
 
+function populateFiltrosClienteCalendarioAgenda(){
+  const clientes = uniqueSorted(TAREAS_ROWS, 'cliente');
+  fillSelect('calCliente', clientes, 'Cliente: todos');
+  fillSelect('agendaCliente', clientes, 'Cliente: todos');
+}
+
 function renderAgenda(){
   const abogadoSel = document.getElementById('agendaAbogado').value;
+  const clienteSel = document.getElementById('agendaCliente').value;
   const hoy = hoyFecha();
 
-  const base = TAREAS_ROWS.filter(r => !abogadoSel || norm(r.abogado) === norm(abogadoSel));
+  const base = TAREAS_ROWS.filter(r => {
+    if(abogadoSel && norm(r.abogado) !== norm(abogadoSel)) return false;
+    if(clienteSel && norm(r.cliente) !== norm(clienteSel)) return false;
+    return true;
+  });
 
   const vencidas = base.filter(r => { const f = soloFecha(r.vencimiento); return f && f.getTime() < hoy.getTime(); });
 
@@ -896,55 +912,139 @@ function renderAgenda(){
 }
 
 document.getElementById('agendaAbogado').addEventListener('change', renderAgenda);
+document.getElementById('agendaCliente').addEventListener('change', renderAgenda);
 
 /* ============================================================
    PROCESAMIENTO DEL ARCHIVO CARGADO
    ============================================================ */
-function procesarArrayBuffer(arrayBuffer){
-  const t0 = performance.now();
 
-  // Lista de nombres de hoja que realmente necesitamos (los demás se ignoran
-  // por completo para no perder tiempo parseando hojas de 50MB que no usamos).
-  const nombresNecesarios = [];
-  AREA_KEYS.forEach(area => {
-    nombresNecesarios.push(AREA_SHEETS[area].main, AREA_SHEETS[area].tasks);
-  });
+// Lista de hojas que realmente necesitamos, con su área y tipo, para poder
+// reconstruir DATA[area].main / DATA[area].tasks sin ambigüedad.
+const AREA_SHEET_LIST = [];
+AREA_KEYS.forEach(area => {
+  AREA_SHEET_LIST.push({ area, kind:'main', wanted: AREA_SHEETS[area].main });
+  AREA_SHEET_LIST.push({ area, kind:'tasks', wanted: AREA_SHEETS[area].tasks });
+});
 
-  // Paso 1: lectura ultra rápida SOLO de los nombres de hoja (sin celdas),
-  // para poder resolver coincidencias exactas (algunas hojas del archivo
-  // real tienen espacios de más al final del nombre).
+// Lectura en el hilo principal (respaldo si el Web Worker no está disponible
+// o falla por cualquier motivo, p. ej. restricciones de red al cargar XLSX
+// dentro del worker).
+function leerHojasEnHiloPrincipal(arrayBuffer){
   const wbNombres = XLSX.read(arrayBuffer, { type:'array', bookSheets:true });
-  const hojasReales = nombresNecesarios
-    .map(n => findSheetName(wbNombres, n))
-    .filter(Boolean);
+  const resueltos = AREA_SHEET_LIST
+    .map(it => ({ ...it, real: findSheetName(wbNombres, it.wanted) }))
+    .filter(x => x.real);
 
-  if(hojasReales.length === 0){
+  if(resueltos.length === 0){
     throw new Error('No se encontraron las hojas esperadas (LABORAL, EJECUTIVOS, CORPORATIVO, TAREAS...) en el archivo cargado.');
   }
 
-  // Paso 2: lectura completa, pero limitada SOLO a esas hojas. Esto evita
-  // que el navegador procese las otras ~18 hojas del libro (auditorías,
-  // listas, hojas antiguas, etc.) y reduce drásticamente el tiempo de carga.
   const wb = XLSX.read(arrayBuffer, {
-    type:'array',
-    cellDates:true,
-    cellStyles:false,
-    cellHTML:false,
-    sheets: hojasReales
+    type:'array', cellDates:true, cellStyles:false, cellHTML:false,
+    sheets: resueltos.map(x => x.real)
   });
 
-  DATA = {};
-  AREA_KEYS.forEach(area => {
-    DATA[area] = {
-      main: sheetToRows(wb, AREA_SHEETS[area].main),
-      tasks: sheetToRows(wb, AREA_SHEETS[area].tasks)
+  const data = {};
+  AREA_KEYS.forEach(a => { data[a] = { main:[], tasks:[] }; });
+  resueltos.forEach(x => { data[x.area][x.kind] = sheetToRows(wb, x.real); });
+  return data;
+}
+
+// Web Worker: hace exactamente lo mismo, pero en un hilo aparte para que la
+// pestaña no se sienta congelada mientras procesa un archivo de varios MB.
+let _xlsxWorker = null;
+function getXlsxWorker(){
+  if(_xlsxWorker) return _xlsxWorker;
+  const workerSrc = `
+    importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+
+    function findSheetName(wb, wanted){
+      const w = wanted.trim().toUpperCase();
+      return wb.SheetNames.find(n => n.trim().toUpperCase() === w) || null;
+    }
+    function sheetToRows(wb, sheetName){
+      const name = findSheetName(wb, sheetName);
+      if(!name) return [];
+      const ws = wb.Sheets[name];
+      if(!ws || !ws['!ref']) return [];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null, raw:true });
+      return rows.slice(1).filter(r => r && r.some(v => v !== null && v !== ''));
+    }
+
+    self.onmessage = function(e){
+      try{
+        const { buffer, items } = e.data;
+        const wbNombres = XLSX.read(buffer, { type:'array', bookSheets:true });
+        const resueltos = items
+          .map(it => ({ area: it.area, kind: it.kind, real: findSheetName(wbNombres, it.wanted) }))
+          .filter(x => x.real);
+        if(resueltos.length === 0){
+          self.postMessage({ ok:false, error:'No se encontraron las hojas esperadas en el archivo.' });
+          return;
+        }
+        const wb = XLSX.read(buffer, { type:'array', cellDates:true, cellStyles:false, cellHTML:false, sheets: resueltos.map(x => x.real) });
+        const data = {};
+        resueltos.forEach(x => {
+          data[x.area] = data[x.area] || { main:[], tasks:[] };
+          data[x.area][x.kind] = sheetToRows(wb, x.real);
+        });
+        self.postMessage({ ok:true, data });
+      }catch(err){
+        self.postMessage({ ok:false, error: (err && err.message) || String(err) });
+      }
     };
+  `;
+  const blob = new Blob([workerSrc], { type:'application/javascript' });
+  _xlsxWorker = new Worker(URL.createObjectURL(blob));
+  return _xlsxWorker;
+}
+
+function leerHojasConWorker(bufferParaTransferir){
+  return new Promise((resolve, reject) => {
+    let worker;
+    try{ worker = getXlsxWorker(); }catch(err){ reject(err); return; }
+
+    const limite = setTimeout(() => reject(new Error('El worker no respondió a tiempo.')), 5 * 60 * 1000);
+    const limpiar = () => {
+      clearTimeout(limite);
+      worker.removeEventListener('message', onMessage);
+      worker.removeEventListener('error', onError);
+    };
+    const onMessage = (e) => {
+      limpiar();
+      if(e.data && e.data.ok) resolve(e.data.data);
+      else reject(new Error((e.data && e.data.error) || 'Error desconocido en el worker.'));
+    };
+    const onError = (err) => { limpiar(); reject(err); };
+
+    worker.addEventListener('message', onMessage);
+    worker.addEventListener('error', onError);
+    worker.postMessage({ buffer: bufferParaTransferir, items: AREA_SHEET_LIST }, [bufferParaTransferir]);
   });
+}
+
+// Intenta primero con el Web Worker (no bloquea la pestaña); si algo falla
+// (por ejemplo, no se puede cargar la librería dentro del worker), procesa
+// en el hilo principal como respaldo, usando el buffer original intacto.
+async function leerHojasNecesarias(arrayBufferOriginal){
+  try{
+    return await leerHojasConWorker(arrayBufferOriginal.slice(0));
+  }catch(err){
+    console.warn('No se pudo usar Web Worker, se procesa en el hilo principal:', err);
+    return leerHojasEnHiloPrincipal(arrayBufferOriginal);
+  }
+}
+
+async function procesarArrayBuffer(arrayBuffer){
+  const t0 = performance.now();
+
+  DATA = await leerHojasNecesarias(arrayBuffer);
 
   PROCESOS_ROWS = buildProcesosRows();
   TAREAS_ROWS = buildTareasRows();
   populateFiltrosConsolidado();
   populateAgendaAbogado();
+  populateFiltrosClienteCalendarioAgenda();
 
   const metricas = calcularMetricas();
   renderResumenKpis(metricas);
@@ -997,14 +1097,22 @@ btnActualizar.addEventListener('click', () => {
   const reader = new FileReader();
   reader.onload = (e) => {
     // Se deja pasar un frame para que el navegador pinte el mensaje de
-    // "Procesando..." ANTES de bloquear el hilo principal con el parseo.
-    uploadStatus.textContent = 'Procesando datos, un momento...';
-    setTimeout(() => {
+    // "Procesando..." ANTES de arrancar el trabajo pesado.
+    const inicio = performance.now();
+    let ticker = setInterval(() => {
+      const s = ((performance.now() - inicio) / 1000).toFixed(0);
+      uploadStatus.textContent = `Procesando datos (${s}s)... esto puede tardar según el tamaño del archivo.`;
+    }, 500);
+
+    setTimeout(async () => {
       try{
-        procesarArrayBuffer(e.target.result);
-        uploadStatus.textContent = `Datos actualizados desde "${file.name}".`;
+        await procesarArrayBuffer(e.target.result);
+        clearInterval(ticker); ticker = null;
+        const total = ((performance.now() - inicio) / 1000).toFixed(1);
+        uploadStatus.textContent = `Datos actualizados desde "${file.name}" en ${total}s.`;
         uploadStatus.className = 'upload-status ok';
       }catch(err){
+        clearInterval(ticker); ticker = null;
         uploadStatus.textContent = 'Error al procesar el archivo: ' + err.message;
         uploadStatus.className = 'upload-status err';
         console.error(err);
@@ -1158,7 +1266,7 @@ async function sincronizarDesdeGraph(){
     const fileResp = await fetch(url, { headers:{ Authorization: 'Bearer ' + token } });
     if(!fileResp.ok) throw new Error('No se pudo descargar el Excel (revisa driveId/itemId y permisos).');
     const arrayBuffer = await fileResp.arrayBuffer();
-    procesarArrayBuffer(arrayBuffer);
+    await procesarArrayBuffer(arrayBuffer);
     setGraphStatus('Conectado. Última sincronización automática: ' + fmtDateTime(new Date()) + '.', false);
   }catch(err){
     setGraphStatus('Error al sincronizar: ' + err.message, true);
