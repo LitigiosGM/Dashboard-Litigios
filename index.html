@@ -183,6 +183,24 @@
     .calendar-layout{flex-direction:column;}
     .vencidas-col{flex:0 0 auto; max-height:260px; width:100%;}
   }
+
+  /* ---- Audiencias (línea de tiempo) ---- */
+  .audiencias-legend{display:flex; align-items:center; gap:8px; margin-left:auto; font-size:.74rem; color:var(--gris);}
+  .audiencias-legend .legend-bar{
+    width:120px; height:10px; border-radius:6px;
+    background:linear-gradient(to right, rgb(192,57,43), rgb(63,143,63));
+  }
+  .timeline-month{margin:18px 0 10px; font-size:.8rem; font-weight:800; color:var(--gris); text-transform:uppercase; letter-spacing:.3px;}
+  .timeline-month.mes-actual{color:var(--texto); background:#fbfbf2; display:inline-block; padding:4px 12px; border-radius:20px; border:1px solid var(--oliva);}
+  .timeline-item{
+    display:flex; gap:12px; background:var(--card); border:1px solid var(--borde); border-left:6px solid #999;
+    border-radius:10px; padding:10px 14px; margin-bottom:8px; font-size:.82rem;
+  }
+  .timeline-item .ti-fecha{flex:0 0 170px; font-weight:800; color:var(--texto);}
+  .timeline-item .ti-fecha small{display:block; font-weight:600; color:var(--gris); font-size:.7rem;}
+  .timeline-item .ti-info{flex:1; color:var(--texto); line-height:1.5;}
+  .timeline-item .ti-info b{font-weight:700;}
+  .timeline-item .ti-info .ti-sub{color:var(--gris); font-size:.76rem;}
 </style>
 </head>
 <body>
@@ -214,8 +232,9 @@
   <!-- Navegación entre hojas -->
   <div class="view-tabs">
     <button class="view-tab active" data-view="resumen" type="button">Resumen</button>
-    <button class="view-tab" data-view="calendario" type="button">Calendario</button>
+    <button class="view-tab" data-view="calendario" type="button">Términos</button>
     <button class="view-tab" data-view="agenda" type="button">Agenda</button>
+    <button class="view-tab" data-view="audiencias" type="button">Audiencias</button>
   </div>
 
   <!-- ================= HOJA: RESUMEN ================= -->
@@ -264,7 +283,7 @@
 
   <!-- ================= HOJA: CALENDARIO ================= -->
   <div class="view-pane" id="pane-calendario">
-    <h2 class="section-title">Calendario de tareas urgentes</h2>
+    <h2 class="section-title">Términos — tareas urgentes</h2>
     <div class="calendar-toolbar">
       <select id="calArea">
         <option value="">Área: todas</option>
@@ -303,6 +322,26 @@
     <div class="agenda-grid" id="agendaGrid"></div>
   </div>
 
+  <!-- ================= HOJA: AUDIENCIAS ================= -->
+  <div class="view-pane" id="pane-audiencias">
+    <h2 class="section-title">Línea de tiempo de audiencias</h2>
+    <div class="calendar-toolbar">
+      <select id="audArea">
+        <option value="">Área: todas</option>
+        <option value="Laboral">Laboral</option>
+        <option value="Ejecutivos">Ejecutivos</option>
+        <option value="Corporativo">Corporativo</option>
+      </select>
+      <select id="audCliente"><option value="">Cliente: todos</option></select>
+      <div class="audiencias-legend">
+        <span>Hoy</span>
+        <span class="legend-bar"></span>
+        <span>30 días +</span>
+      </div>
+    </div>
+    <div id="audienciasTimeline"></div>
+  </div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -321,13 +360,16 @@ const AREA_SHEETS = {
 const AREA_COLS = {
   LABORAL:     { n:'A', area:'B', cliente:'F', demandante:'G', demandado:'H', tematica:'K', radicado:'L',
                  apoderado:'T', carpeta:'V', estado:'AE', audiencia:'Y', tareasPendientes:'AH',
-                 fechaInicio:'C', dependencia:'O', instancia:'P', municipio:'R', abogado:'S' },
+                 fechaInicio:'C', dependencia:'O', instancia:'P', municipio:'R', abogado:'S',
+                 audienciaFecha:'Z', audienciaAsistente:'AA' },
   EJECUTIVOS:  { n:'A', area:'B', cliente:'F', demandante:'G', demandado:'H', tematica:'K', radicado:'L',
                  apoderado:'T', carpeta:'V', estado:'AG', audiencia:'Y', tareasPendientes:'AJ',
-                 fechaInicio:'C', dependencia:'O', instancia:'P', municipio:'R', abogado:'S' },
+                 fechaInicio:'C', dependencia:'O', instancia:'P', municipio:'R', abogado:'S',
+                 audienciaFecha:'Z', audienciaAsistente:'AA' },
   CORPORATIVO: { n:'A', area:'B', cliente:'F', demandante:'G', demandado:'H', tematica:'K', radicado:'L',
                  apoderado:'T', carpeta:'V', estado:'AE', audiencia:'Y', tareasPendientes:'AH',
-                 fechaInicio:'C', dependencia:'O', instancia:'P', municipio:'R', abogado:'S' }
+                 fechaInicio:'C', dependencia:'O', instancia:'P', municipio:'R', abogado:'S',
+                 audienciaFecha:'Z', audienciaAsistente:'AA' }
 };
 
 // Columnas (letras de Excel) de las hojas de tareas (mismo esquema en las 3)
@@ -399,6 +441,8 @@ function buildProcesosRows(){
         carpeta: cell(r, cols.carpeta),
         estado: cell(r, cols.estado),
         audiencia: cell(r, cols.audiencia),
+        audienciaFecha: cell(r, cols.audienciaFecha),
+        audienciaAsistente: cell(r, cols.audienciaAsistente),
         tareasPendientes: cell(r, cols.tareasPendientes)
       });
     });
@@ -881,7 +925,12 @@ function renderAgenda(){
   const clienteSel = document.getElementById('agendaCliente').value;
   const hoy = hoyFecha();
 
+  // Igual que en "Términos": solo tareas de PRIORIDAD = 1 (columna M).
+  // A diferencia de "Términos", aquí NO se filtra por GESTIÓN (columna P):
+  // se muestran tanto las gestionadas como las no gestionadas, ya que el
+  // objetivo de la agenda es ver todo lo prioritario del abogado día a día.
   const base = TAREAS_ROWS.filter(r => {
+    if(Number(r.prioridad) !== 1) return false;
     if(abogadoSel && norm(r.abogado) !== norm(abogadoSel)) return false;
     if(clienteSel && norm(r.cliente) !== norm(clienteSel)) return false;
     return true;
@@ -913,6 +962,85 @@ function renderAgenda(){
 
 document.getElementById('agendaAbogado').addEventListener('change', renderAgenda);
 document.getElementById('agendaCliente').addEventListener('change', renderAgenda);
+
+/* ============================================================
+   HOJA: AUDIENCIAS (línea de tiempo)
+   ============================================================ */
+const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+// Rojo (--rojo) → Verde (--verde). De 0 a 15 días: rojo fijo (máxima
+// prioridad). De 15 a 30 días: transición gradual. De 30 en adelante: verde.
+// Audiencias ya pasadas: gris (no requieren más seguimiento).
+function colorAudiencia(dias){
+  if(dias === null || dias === undefined) return '#999';
+  if(dias < 0) return '#b9bcbe';
+  const rojo = [192,57,43], verde = [63,143,63];
+  let t;
+  if(dias <= 15) t = 0;
+  else if(dias >= 30) t = 1;
+  else t = (dias - 15) / 15;
+  const rgb = rojo.map((v,i) => Math.round(v + (verde[i]-v) * t));
+  return `rgb(${rgb.join(',')})`;
+}
+
+function populateFiltroClienteAudiencias(){
+  fillSelect('audCliente', uniqueSorted(PROCESOS_ROWS, 'cliente'), 'Cliente: todos');
+}
+
+function renderAudiencias(){
+  const areaSel = document.getElementById('audArea').value;
+  const clienteSel = document.getElementById('audCliente').value;
+  const hoy = hoyFecha();
+
+  const items = PROCESOS_ROWS
+    .filter(r => {
+      const f = soloFecha(r.audienciaFecha);
+      if(!f) return false;
+      if(areaSel && r.area !== areaSel) return false;
+      if(clienteSel && norm(r.cliente) !== norm(clienteSel)) return false;
+      return true;
+    })
+    .map(r => {
+      const f = soloFecha(r.audienciaFecha);
+      const dias = Math.round((f.getTime() - hoy.getTime()) / 86400000);
+      return { ...r, fecha: f, dias };
+    })
+    .sort((a,b) => a.fecha - b.fecha);
+
+  const cont = document.getElementById('audienciasTimeline');
+  if(items.length === 0){
+    cont.innerHTML = '<div class="empty-state">No hay audiencias programadas que coincidan con el filtro.</div>';
+    return;
+  }
+
+  const hoyClave = `${hoy.getFullYear()}-${hoy.getMonth()}`;
+  let mesActualHtml = '';
+  let ultimoMes = null;
+  items.forEach(it => {
+    const claveMes = `${it.fecha.getFullYear()}-${it.fecha.getMonth()}`;
+    if(claveMes !== ultimoMes){
+      ultimoMes = claveMes;
+      const esMesActual = claveMes === hoyClave;
+      const nombreMes = `${MESES_ES[it.fecha.getMonth()]} ${it.fecha.getFullYear()}`;
+      mesActualHtml += `<div class="timeline-month${esMesActual ? ' mes-actual' : ''}">${nombreMes}${esMesActual ? ' — mes en curso' : ''}</div>`;
+    }
+    const color = colorAudiencia(it.dias);
+    const fechaTxt = it.fecha.toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' });
+    const relTxt = it.dias < 0 ? 'Ya pasó' : it.dias === 0 ? 'Hoy' : `En ${it.dias} día${it.dias === 1 ? '' : 's'}`;
+    mesActualHtml += `<div class="timeline-item" style="border-left-color:${color};">
+      <div class="ti-fecha">${escapeHtml(fechaTxt)}<small>${escapeHtml(relTxt)}</small></div>
+      <div class="ti-info">
+        <b>N° ${escapeHtml(it.n ?? '')} — ${escapeHtml(it.area)}</b> · Carpeta ${escapeHtml(it.carpeta ?? '—')}<br>
+        <span class="ti-sub">Cliente: ${escapeHtml(it.cliente ?? '—')} · Demandante: ${escapeHtml(it.demandante ?? '—')} · Demandado: ${escapeHtml(it.demandado ?? '—')}</span><br>
+        <span class="ti-sub">Apoderado: ${escapeHtml(it.apoderado ?? '—')}${it.audienciaAsistente ? ' · Asiste: ' + escapeHtml(it.audienciaAsistente) : ''}</span>
+      </div>
+    </div>`;
+  });
+  cont.innerHTML = mesActualHtml;
+}
+
+document.getElementById('audArea').addEventListener('change', renderAudiencias);
+document.getElementById('audCliente').addEventListener('change', renderAudiencias);
 
 /* ============================================================
    PROCESAMIENTO DEL ARCHIVO CARGADO
@@ -1045,6 +1173,7 @@ async function procesarArrayBuffer(arrayBuffer){
   populateFiltrosConsolidado();
   populateAgendaAbogado();
   populateFiltrosClienteCalendarioAgenda();
+  populateFiltroClienteAudiencias();
 
   const metricas = calcularMetricas();
   renderResumenKpis(metricas);
@@ -1053,6 +1182,7 @@ async function procesarArrayBuffer(arrayBuffer){
   renderResultados();
   renderCalendario();
   renderAgenda();
+  renderAudiencias();
 
   document.getElementById('btnGuardar').disabled = false;
   document.getElementById('btnGuardar').title = '';
@@ -1284,6 +1414,7 @@ window.addEventListener('load', async () => { await initMsal(); });
 renderResultados();
 renderCalendario();
 renderAgenda();
+renderAudiencias();
 setLastUpdated(null);
 </script>
 </body>
