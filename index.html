@@ -1513,7 +1513,7 @@ async function iniciarSesionYSincronizar(){
     if(btn) btn.disabled = true;
     setGraphStatus('Conectando con Microsoft 365...', false);
     if(!msalInstance) await initMsal();
-    const loginResp = await msalInstance.loginPopup({ scopes:['Files.Read'] });
+    const loginResp = await msalInstance.loginPopup({ scopes:['Files.Read.All'] });
     graphAccount = loginResp.account;
     await sincronizarDesdeGraph();
     programarRefrescoAutomatico();
@@ -1525,7 +1525,7 @@ async function iniciarSesionYSincronizar(){
 }
 
 async function obtenerTokenSilencioso(){
-  const req = { scopes:['Files.Read'], account: graphAccount };
+  const req = { scopes:['Files.Read.All'], account: graphAccount };
   try{
     const r = await msalInstance.acquireTokenSilent(req);
     return r.accessToken;
