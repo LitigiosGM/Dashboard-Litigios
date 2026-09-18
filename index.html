@@ -201,9 +201,33 @@
   .timeline-item .ti-info{flex:1; color:var(--texto); line-height:1.5;}
   .timeline-item .ti-info b{font-weight:700;}
   .timeline-item .ti-info .ti-sub{color:var(--gris); font-size:.76rem;}
+  .badge-cierre{
+    display:inline-block; background:var(--rojo-bg); color:var(--rojo); font-weight:700;
+    font-size:.66rem; text-transform:uppercase; letter-spacing:.2px; padding:3px 9px;
+    border-radius:20px; margin-left:8px; vertical-align:middle;
+  }
+  /* ---- Aviso de pendientes del día ---- */
+  .pending-banner{
+    display:none; position:fixed; top:0; left:0; right:0; z-index:9999;
+    background:#fff7e6; border-bottom:3px solid #d99a1b;
+    padding:12px 20px; align-items:center; gap:16px; flex-wrap:wrap;
+    box-shadow:0 2px 12px rgba(0,0,0,.15); font-size:.85rem; color:#5b4300;
+  }
+  .pending-banner b{color:#5b4300;}
+  .pending-banner .pb-text{flex:1; min-width:240px;}
+  .pending-banner button{
+    border:none; background:#d99a1b; color:#fff; font-weight:700; padding:8px 18px;
+    border-radius:8px; cursor:pointer; font-size:.82rem; white-space:nowrap;
+  }
+  .pending-banner button:hover{background:#c28816;}
 </style>
 </head>
 <body>
+
+<div class="pending-banner" id="pendingBanner">
+  <span class="pb-text" id="pendingBannerText"></span>
+  <button id="pendingBannerClose" type="button">OK, entendido</button>
+</div>
 
 <header>
   <h1>Dashboard de Litigios — Resumen</h1>
@@ -863,11 +887,15 @@ function renderCalendario(){
   const inicioGrid = new Date(primerDia); inicioGrid.setDate(inicioGrid.getDate() - primerDia.getDay());
   const finGrid = new Date(ultimoDia); finGrid.setDate(finGrid.getDate() + (6 - ultimoDia.getDay()));
 
-  // Tareas NO vencidas, agrupadas por fecha (esas ya se muestran en "Vencidas")
+  // Todas las tareas del filtro actual, agrupadas por fecha — incluye tanto
+  // las futuras como las que ya vencieron. Como "base" ya exige GESTIÓN =
+  // "NO GESTIONADA", cualquier tarea que caiga en un día pasado es, por
+  // definición, un término vencido y aún sin cerrar: se marca en rojo en su
+  // propio día del calendario (además de seguir apareciendo en "Vencidas").
   const porFecha = {};
   base.forEach(r => {
     const f = soloFecha(r.vencimiento);
-    if(!f || f.getTime() < hoy.getTime()) return;
+    if(!f) return;
     (porFecha[claveFecha(f)] = porFecha[claveFecha(f)] || []).push(r);
   });
 
@@ -877,10 +905,12 @@ function renderCalendario(){
     const key = claveFecha(cursor);
     const esDelMes = cursor.getMonth() === month;
     const esHoy = cursor.getTime() === hoy.getTime();
+    const esPasado = cursor.getTime() < hoy.getTime();
     const tareasDia = porFecha[key] || [];
     const chips = tareasDia.map(r => {
       const texto = `${r.asignacion || ''} — ${r.abogado || ''}`;
-      return `<div class="task-chip c-${colorPorTexto(texto)}" title="${escapeHtml(texto)}">${escapeHtml(texto)}</div>`;
+      const color = esPasado ? 'rojo' : colorPorTexto(texto);
+      return `<div class="task-chip c-${color}" title="${escapeHtml(texto)}">${escapeHtml(texto)}</div>`;
     }).join('');
     celdas.push(`<div class="calendar-day${esDelMes ? '' : ' outside'}${esHoy ? ' today' : ''}">
       <div class="day-num">${cursor.getDate()}</div>
@@ -1027,10 +1057,11 @@ function renderAudiencias(){
     const color = colorAudiencia(it.dias);
     const fechaTxt = it.fecha.toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' });
     const relTxt = it.dias < 0 ? 'Ya pasó' : it.dias === 0 ? 'Hoy' : `En ${it.dias} día${it.dias === 1 ? '' : 's'}`;
+    const etiquetaPendiente = it.dias < 0 ? '<span class="badge-cierre">Pendiente por cerrar</span>' : '';
     mesActualHtml += `<div class="timeline-item" style="border-left-color:${color};">
       <div class="ti-fecha">${escapeHtml(fechaTxt)}<small>${escapeHtml(relTxt)}</small></div>
       <div class="ti-info">
-        <b>N° ${escapeHtml(it.n ?? '')} — ${escapeHtml(it.area)}</b> · Carpeta ${escapeHtml(it.carpeta ?? '—')}<br>
+        <b>N° ${escapeHtml(it.n ?? '')} — ${escapeHtml(it.area)}</b> · Carpeta ${escapeHtml(it.carpeta ?? '—')}${etiquetaPendiente}<br>
         <span class="ti-sub">Cliente: ${escapeHtml(it.cliente ?? '—')} · Demandante: ${escapeHtml(it.demandante ?? '—')} · Demandado: ${escapeHtml(it.demandado ?? '—')}</span><br>
         <span class="ti-sub">Apoderado: ${escapeHtml(it.apoderado ?? '—')}${it.audienciaAsistente ? ' · Asiste: ' + escapeHtml(it.audienciaAsistente) : ''}</span>
       </div>
@@ -1043,21 +1074,111 @@ document.getElementById('audArea').addEventListener('change', renderAudiencias);
 document.getElementById('audCliente').addEventListener('change', renderAudiencias);
 
 /* ============================================================
+   AVISO DE PENDIENTES DEL DÍA (cada 60 minutos)
+   ============================================================ */
+function calcularResumenPendientesHoy(){
+  const hoy = hoyFecha();
+  const pendientesHoy = TAREAS_ROWS.filter(r => {
+    if(norm(r.gestion) !== 'NO GESTIONADA') return false;
+    // Ajuste exclusivo de este aviso: si el ESTADO (columna R, el que va
+    // embebido en el texto de ASIGNACIÓN) ya dice "TERMINADA", el abogado
+    // ya ejecutó la tarea y solo falta el cierre de secretaría — no cuenta
+    // como pendiente de ejecutar. No afecta a "Agenda" ni a ninguna otra hoja.
+    if(norm(r.estadoR) === 'TERMINADA') return false;
+    if(norm(r.asignacion).includes('TERMINADA')) return false;
+    const f = soloFecha(r.vencimiento);
+    return f && f.getTime() === hoy.getTime();
+  });
+  const urgentes = pendientesHoy.filter(r => Number(r.prioridad) === 1).length;
+  const porAbogado = {};
+  pendientesHoy.forEach(r => {
+    const ab = (r.abogado && String(r.abogado).trim()) || 'Sin asignar';
+    porAbogado[ab] = (porAbogado[ab] || 0) + 1;
+  });
+  return { total: pendientesHoy.length, urgentes, porAbogado };
+}
+
+function mostrarResumenPendientesDia(){
+  if(!TAREAS_ROWS || TAREAS_ROWS.length === 0) return; // aún no hay datos cargados
+
+  const r = calcularResumenPendientesHoy();
+  const hoyTxt = hoyFecha().toLocaleDateString('es-CO', { day:'2-digit', month:'long', year:'numeric' });
+  const texto = document.getElementById('pendingBannerText');
+
+  if(r.total === 0){
+    texto.innerHTML = `<b>Sin tareas pendientes para hoy (${escapeHtml(hoyTxt)}).</b> No hay términos por gestionar hoy.`;
+  }else{
+    const porAbogadoOrdenado = Object.entries(r.porAbogado).sort((a,b) => b[1] - a[1]);
+    const top = porAbogadoOrdenado.slice(0, 5);
+    const restoN = porAbogadoOrdenado.length - top.length;
+    const abogadoTxt = top.map(([nombre,cant]) => `${escapeHtml(nombre)} (${cant})`).join(', ') + (restoN > 0 ? ` y ${restoN} más` : '');
+
+    texto.innerHTML = `<b>Aún te quedan ${r.total} tarea${r.total === 1 ? '' : 's'} pendiente${r.total === 1 ? '' : 's'} por ejecutar hoy (${escapeHtml(hoyTxt)}).</b> ` +
+      `${r.urgentes} corresponde${r.urgentes === 1 ? '' : 'n'} a Términos que requieren atención urgente. ` +
+      (abogadoTxt ? `Por abogado: ${abogadoTxt}.` : '');
+  }
+
+  document.getElementById('pendingBanner').style.display = 'flex';
+}
+
+document.getElementById('pendingBannerClose').addEventListener('click', () => {
+  document.getElementById('pendingBanner').style.display = 'none';
+});
+
+let _pendingBannerInterval = null;
+function iniciarAvisoPendientesDia(){
+  mostrarResumenPendientesDia(); // siempre al abrir / actualizar los datos por primera vez
+  if(_pendingBannerInterval) clearInterval(_pendingBannerInterval);
+  _pendingBannerInterval = setInterval(mostrarResumenPendientesDia, 60 * 60 * 1000); // cada 60 minutos
+}
+
+/* ============================================================
    PROCESAMIENTO DEL ARCHIVO CARGADO
    ============================================================ */
+
+// Nombres reales conocidos de las hojas en el archivo actual (incluye la
+// variación real, como el espacio final en "TAREAS LABORAL LITIGIOS "). Si
+// coinciden, evitamos escanear el libro dos veces.
+const NOMBRES_HOJA_CONOCIDOS = {
+  main:  { LABORAL:'LABORAL', EJECUTIVOS:'EJECUTIVOS', CORPORATIVO:'CORPORATIVO' },
+  tasks: { LABORAL:'TAREAS LABORAL LITIGIOS ', EJECUTIVOS:'TAREAS EJECUTIVOS', CORPORATIVO:'TAREAS CORPORATIVO' }
+};
 
 // Lista de hojas que realmente necesitamos, con su área y tipo, para poder
 // reconstruir DATA[area].main / DATA[area].tasks sin ambigüedad.
 const AREA_SHEET_LIST = [];
 AREA_KEYS.forEach(area => {
-  AREA_SHEET_LIST.push({ area, kind:'main', wanted: AREA_SHEETS[area].main });
-  AREA_SHEET_LIST.push({ area, kind:'tasks', wanted: AREA_SHEETS[area].tasks });
+  AREA_SHEET_LIST.push({ area, kind:'main', wanted: AREA_SHEETS[area].main, conocido: NOMBRES_HOJA_CONOCIDOS.main[area] });
+  AREA_SHEET_LIST.push({ area, kind:'tasks', wanted: AREA_SHEETS[area].tasks, conocido: NOMBRES_HOJA_CONOCIDOS.tasks[area] });
 });
 
 // Lectura en el hilo principal (respaldo si el Web Worker no está disponible
 // o falla por cualquier motivo, p. ej. restricciones de red al cargar XLSX
 // dentro del worker).
 function leerHojasEnHiloPrincipal(arrayBuffer){
+  // Camino rápido: UNA sola lectura usando los nombres de hoja ya conocidos.
+  // Si el archivo no cambió su estructura, esto evita escanear el libro dos
+  // veces (antes se hacía una pasada solo para detectar nombres y luego
+  // otra completa; ahora, si los nombres coinciden, basta con una).
+  try{
+    const data = {};
+    AREA_KEYS.forEach(a => { data[a] = { main:[], tasks:[] }; });
+    const wbDirecto = XLSX.read(arrayBuffer, {
+      type:'array', cellDates:true, cellStyles:false, cellHTML:false,
+      sheets: AREA_SHEET_LIST.map(it => it.conocido)
+    });
+    let completos = true;
+    AREA_SHEET_LIST.forEach(it => {
+      if(!wbDirecto.Sheets[it.conocido]){ completos = false; return; }
+      data[it.area][it.kind] = sheetToRows(wbDirecto, it.conocido);
+    });
+    if(completos) return data;
+  }catch(err){
+    console.warn('Camino rápido de lectura falló, se usa detección de nombres:', err);
+  }
+
+  // Camino robusto (dos pasadas): detecta los nombres reales de las hojas
+  // aunque hayan cambiado (espacios, mayúsculas, etc.) respecto a lo esperado.
   const wbNombres = XLSX.read(arrayBuffer, { type:'array', bookSheets:true });
   const resueltos = AREA_SHEET_LIST
     .map(it => ({ ...it, real: findSheetName(wbNombres, it.wanted) }))
@@ -1102,6 +1223,25 @@ function getXlsxWorker(){
     self.onmessage = function(e){
       try{
         const { buffer, items } = e.data;
+
+        // Camino rápido: una sola lectura con los nombres ya conocidos.
+        try{
+          const wbDirecto = XLSX.read(buffer, { type:'array', cellDates:true, cellStyles:false, cellHTML:false, sheets: items.map(it => it.conocido) });
+          const dataDirecta = {};
+          let completos = true;
+          items.forEach(it => {
+            dataDirecta[it.area] = dataDirecta[it.area] || { main:[], tasks:[] };
+            if(!wbDirecto.Sheets[it.conocido]){ completos = false; return; }
+            dataDirecta[it.area][it.kind] = sheetToRows(wbDirecto, it.conocido);
+          });
+          if(completos){
+            self.postMessage({ ok:true, data: dataDirecta });
+            return;
+          }
+        }catch(errRapido){ /* sigue al camino robusto */ }
+
+        // Camino robusto (dos pasadas): detecta los nombres reales aunque
+        // hayan cambiado respecto a lo esperado.
         const wbNombres = XLSX.read(buffer, { type:'array', bookSheets:true });
         const resueltos = items
           .map(it => ({ area: it.area, kind: it.kind, real: findSheetName(wbNombres, it.wanted) }))
@@ -1154,11 +1294,16 @@ function leerHojasConWorker(bufferParaTransferir){
 // Intenta primero con el Web Worker (no bloquea la pestaña); si algo falla
 // (por ejemplo, no se puede cargar la librería dentro del worker), procesa
 // en el hilo principal como respaldo, usando el buffer original intacto.
+let ULTIMA_VIA_LECTURA = null; // 'worker' | 'hilo-principal' — para diagnóstico
+
 async function leerHojasNecesarias(arrayBufferOriginal){
   try{
-    return await leerHojasConWorker(arrayBufferOriginal.slice(0));
+    const data = await leerHojasConWorker(arrayBufferOriginal.slice(0));
+    ULTIMA_VIA_LECTURA = 'worker';
+    return data;
   }catch(err){
     console.warn('No se pudo usar Web Worker, se procesa en el hilo principal:', err);
+    ULTIMA_VIA_LECTURA = 'hilo-principal';
     return leerHojasEnHiloPrincipal(arrayBufferOriginal);
   }
 }
@@ -1183,6 +1328,7 @@ async function procesarArrayBuffer(arrayBuffer){
   renderCalendario();
   renderAgenda();
   renderAudiencias();
+  iniciarAvisoPendientesDia();
 
   document.getElementById('btnGuardar').disabled = false;
   document.getElementById('btnGuardar').title = '';
@@ -1239,7 +1385,7 @@ btnActualizar.addEventListener('click', () => {
         await procesarArrayBuffer(e.target.result);
         clearInterval(ticker); ticker = null;
         const total = ((performance.now() - inicio) / 1000).toFixed(1);
-        uploadStatus.textContent = `Datos actualizados desde "${file.name}" en ${total}s.`;
+        uploadStatus.textContent = `Datos actualizados desde "${file.name}" en ${total}s (${ULTIMA_VIA_LECTURA === 'worker' ? 'segundo plano' : 'hilo principal, respaldo'}).`;
         uploadStatus.className = 'upload-status ok';
       }catch(err){
         clearInterval(ticker); ticker = null;
