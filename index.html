@@ -1537,13 +1537,28 @@ async function obtenerTokenSilencioso(){
 
 async function sincronizarDesdeGraph(){
   try{
+    const t0 = performance.now();
     const token = await obtenerTokenSilencioso();
     const url = `https://graph.microsoft.com/v1.0/drives/${GRAPH_CONFIG.driveId}/items/${GRAPH_CONFIG.itemId}/content`;
+    setGraphStatus('Descargando archivo desde SharePoint...', false);
     const fileResp = await fetch(url, { headers:{ Authorization: 'Bearer ' + token } });
     if(!fileResp.ok) throw new Error('No se pudo descargar el Excel (revisa driveId/itemId y permisos).');
     const arrayBuffer = await fileResp.arrayBuffer();
+    const tDescarga = ((performance.now() - t0) / 1000).toFixed(1);
+    const pesoMB = (arrayBuffer.byteLength / 1024 / 1024).toFixed(1);
+    setGraphStatus(`Descarga (${pesoMB} MB) completada en ${tDescarga}s. Procesando datos...`, false);
+
+    const t1 = performance.now();
     await procesarArrayBuffer(arrayBuffer);
-    setGraphStatus('Conectado. Última sincronización automática: ' + fmtDateTime(new Date()) + '.', false);
+    const tProceso = ((performance.now() - t1) / 1000).toFixed(1);
+    const tTotal = ((performance.now() - t0) / 1000).toFixed(1);
+
+    setGraphStatus(
+      `Conectado. Última sincronización: ${fmtDateTime(new Date())} — ` +
+      `descarga ${tDescarga}s + procesamiento ${tProceso}s (${ULTIMA_VIA_LECTURA === 'worker' ? 'segundo plano' : 'hilo principal'}) = ${tTotal}s total.`,
+      false
+    );
+    console.log(`[Sincronización Graph] descarga=${tDescarga}s proceso=${tProceso}s total=${tTotal}s vía=${ULTIMA_VIA_LECTURA}`);
   }catch(err){
     setGraphStatus('Error al sincronizar: ' + err.message, true);
     console.error(err);
