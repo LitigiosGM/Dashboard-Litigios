@@ -439,6 +439,18 @@ function fmtDateTime(d){
   }catch(e){ return String(d); }
 }
 
+// Convierte un texto "YYYY-MM-DD" (como llegan las fechas del JSON liviano)
+// en una fecha LOCAL a medianoche, en vez de usar new Date(texto) — eso
+// último interpreta el texto como medianoche UTC, lo que en Colombia
+// (UTC-5) lo corre un día hacia atrás al leer sus componentes locales.
+function parsearFechaLocal(texto){
+  if(!texto || typeof texto !== 'string') return null;
+  const m = texto.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
 /* ============================================================
    FILAS "TIDY" DE PROCESOS Y TAREAS (base de métricas y filtros)
    ============================================================ */
@@ -1363,7 +1375,7 @@ function procesarJSON(json){
         demandado: p.demandado ?? null, tematica: p.tematica ?? null, radicado: p.radicado ?? null,
         apoderado: p.apoderado ?? null, carpeta: p.carpeta ?? null, estado: p.estado ?? null,
         audiencia: p.audiencia ?? null,
-        audienciaFecha: p.audienciaFecha ? new Date(p.audienciaFecha) : null,
+        audienciaFecha: p.audienciaFecha ? parsearFechaLocal(p.audienciaFecha) : null,
         audienciaAsistente: p.audienciaAsistente ?? null,
         tareasPendientes: p.tareasPendientes ?? null
       });
@@ -1374,7 +1386,7 @@ function procesarJSON(json){
         numeroProceso: t.numeroProceso ?? null,
         cliente: t.cliente ?? null, demandante: null, demandado: null, carpeta: null, radicado: null,
         descripcion: t.descripcion ?? null, abogado: t.abogado ?? null,
-        vencimiento: t.vencimiento ? new Date(t.vencimiento) : null,
+        vencimiento: t.vencimiento ? parsearFechaLocal(t.vencimiento) : null,
         gestion: t.gestion ?? null, estadoK: t.estadoK ?? null, estadoR: t.estadoR ?? null,
         prioridad: t.prioridad ?? null, asignacion: t.asignacion ?? null
       });
