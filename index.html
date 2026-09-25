@@ -1308,13 +1308,9 @@ async function leerHojasNecesarias(arrayBufferOriginal){
   }
 }
 
-async function procesarArrayBuffer(arrayBuffer){
-  const t0 = performance.now();
-
-  DATA = await leerHojasNecesarias(arrayBuffer);
-
-  PROCESOS_ROWS = buildProcesosRows();
-  TAREAS_ROWS = buildTareasRows();
+// Pasos comunes tras tener PROCESOS_ROWS y TAREAS_ROWS listos, sin importar
+// si vinieron de parsear el .xlsx completo o de un .json ya liviano.
+function finalizarCargaDeDatos(){
   populateFiltrosConsolidado();
   populateAgendaAbogado();
   populateFiltrosClienteCalendarioAgenda();
@@ -1333,9 +1329,83 @@ async function procesarArrayBuffer(arrayBuffer){
   document.getElementById('btnGuardar').disabled = false;
   document.getElementById('btnGuardar').title = '';
   setLastUpdated(new Date());
+}
+
+async function procesarArrayBuffer(arrayBuffer){
+  const t0 = performance.now();
+
+  DATA = await leerHojasNecesarias(arrayBuffer);
+
+  PROCESOS_ROWS = buildProcesosRows();
+  TAREAS_ROWS = buildTareasRows();
+  finalizarCargaDeDatos();
 
   const segundos = ((performance.now() - t0) / 1000).toFixed(1);
   console.log(`Archivo procesado en ${segundos}s`);
+}
+
+// Carga directa desde el JSON liviano que genera Power Automate — sin
+// SheetJS, sin Web Worker, sin descargar el Excel de 50MB. El JSON ya trae
+// los campos con nombre (no letras de columna), así que se arma
+// PROCESOS_ROWS / TAREAS_ROWS directamente.
+function procesarJSON(json){
+  const t0 = performance.now();
+
+  PROCESOS_ROWS = [];
+  TAREAS_ROWS = [];
+
+  AREA_KEYS.forEach(area => {
+    const label = AREA_LABELS[area];
+    (json.procesos && json.procesos[area] || []).forEach(p => {
+      PROCESOS_ROWS.push({
+        areaKey: area, area: label,
+        n: p.n ?? null, cliente: p.cliente ?? null, demandante: p.demandante ?? null,
+        demandado: p.demandado ?? null, tematica: p.tematica ?? null, radicado: p.radicado ?? null,
+        apoderado: p.apoderado ?? null, carpeta: p.carpeta ?? null, estado: p.estado ?? null,
+        audiencia: p.audiencia ?? null,
+        audienciaFecha: p.audienciaFecha ? new Date(p.audienciaFecha) : null,
+        audienciaAsistente: p.audienciaAsistente ?? null,
+        tareasPendientes: p.tareasPendientes ?? null
+      });
+    });
+    (json.tareas && json.tareas[area] || []).forEach(t => {
+      TAREAS_ROWS.push({
+        areaKey: area, area: label,
+        numeroProceso: t.numeroProceso ?? null,
+        cliente: t.cliente ?? null, demandante: null, demandado: null, carpeta: null, radicado: null,
+        descripcion: t.descripcion ?? null, abogado: t.abogado ?? null,
+        vencimiento: t.vencimiento ? new Date(t.vencimiento) : null,
+        gestion: t.gestion ?? null, estadoK: t.estadoK ?? null, estadoR: t.estadoR ?? null,
+        prioridad: t.prioridad ?? null, asignacion: t.asignacion ?? null
+      });
+    });
+  });
+
+  // Igual que en buildTareasRows(): cruzar cada tarea con su proceso (por
+  // N° de columna A) para heredar Demandante/Demandado/Carpeta/Radicado.
+  const indice = {};
+  PROCESOS_ROWS.forEach(p => {
+    if(p.n !== null && p.n !== undefined && p.n !== ''){
+      indice[`${p.areaKey}||${norm(p.n)}`] = p;
+    }
+  });
+  TAREAS_ROWS.forEach(t => {
+    const proceso = (t.numeroProceso !== null && t.numeroProceso !== '')
+      ? indice[`${t.areaKey}||${norm(t.numeroProceso)}`]
+      : undefined;
+    if(proceso){
+      if(!t.cliente) t.cliente = proceso.cliente;
+      t.demandante = proceso.demandante;
+      t.demandado = proceso.demandado;
+      t.carpeta = proceso.carpeta;
+      t.radicado = proceso.radicado;
+    }
+  });
+
+  finalizarCargaDeDatos();
+
+  const segundos = ((performance.now() - t0) / 1000).toFixed(1);
+  console.log(`JSON procesado en ${segundos}s`);
 }
 
 function setLastUpdated(date){
@@ -1451,8 +1521,15 @@ document.querySelectorAll('.view-tab').forEach(tab => {
 const GRAPH_CONFIG = {
   clientId:  'a2a225d4-4a1a-4a7f-beb8-e1695678ad7d',
   tenantId:  'd50355d0-b0a9-4c85-8711-cf8966cbb72f',
+  // Archivo MAESTRO (.xlsx, 50MB) — solo se usa si aún no hay JSON liviano
+  // configurado abajo (jsonDriveId/jsonItemId), como respaldo.
   driveId:   'b!pGxR8bCf-kGHBYY4apFN98pBkgc5TY9Gv8VLyKjUv_7EKnOTOJNUSaLBL80J3D8R',
   itemId:    '01VYLCTT2I6TRENTXW5BE243TTUKIGFVN2',
+  // Archivo LIVIANO (.json, generado por Power Automate) — esta es la vía
+  // rápida. Complétalos cuando tengas el flujo funcionando; mientras tanto
+  // el tablero sigue usando el archivo maestro de arriba.
+  jsonDriveId: 'b!SBkbgI0YwUi9iN9tMP21ZMpBkgc5TY9Gv8VLyKjUv_7EKnOTOJNUSaLBL80J3D8R',
+  jsonItemId:  '01S74TB2FZAABTR67U25GIBISUZ5AFBX',
   redirectUri: 'https://litigiosgm.github.io/Dashboard-Litigios/',
   refreshMinutes: 60
 };
@@ -1461,7 +1538,13 @@ let msalInstance = null;
 let graphAccount = null;
 
 function graphConfigured(){
-  return !Object.values(GRAPH_CONFIG).some(v => typeof v === 'string' && v.startsWith('PENDIENTE_'));
+  const claves = ['clientId','tenantId','driveId','itemId','redirectUri'];
+  return !claves.some(k => typeof GRAPH_CONFIG[k] === 'string' && GRAPH_CONFIG[k].startsWith('PENDIENTE_'));
+}
+
+function jsonConfigured(){
+  return typeof GRAPH_CONFIG.jsonDriveId === 'string' && !GRAPH_CONFIG.jsonDriveId.startsWith('PENDIENTE_')
+      && typeof GRAPH_CONFIG.jsonItemId === 'string' && !GRAPH_CONFIG.jsonItemId.startsWith('PENDIENTE_');
 }
 
 async function initMsal(){
@@ -1539,8 +1622,29 @@ async function sincronizarDesdeGraph(){
   try{
     const t0 = performance.now();
     const token = await obtenerTokenSilencioso();
+
+    if(jsonConfigured()){
+      // Vía rápida: archivo .json liviano generado por Power Automate.
+      const url = `https://graph.microsoft.com/v1.0/drives/${GRAPH_CONFIG.jsonDriveId}/items/${GRAPH_CONFIG.jsonItemId}/content`;
+      setGraphStatus('Descargando datos (JSON liviano)...', false);
+      const resp = await fetch(url, { headers:{ Authorization: 'Bearer ' + token } });
+      if(!resp.ok) throw new Error('No se pudo descargar el JSON (revisa jsonDriveId/jsonItemId y que el flujo de Power Automate haya corrido).');
+      const json = await resp.json();
+      const tDescarga = ((performance.now() - t0) / 1000).toFixed(1);
+
+      procesarJSON(json);
+      const tTotal = ((performance.now() - t0) / 1000).toFixed(1);
+      setGraphStatus(
+        `Conectado (vía JSON liviano). Última sincronización: ${fmtDateTime(new Date())} — ${tTotal}s total.`,
+        false
+      );
+      console.log(`[Sincronización Graph · JSON] descarga=${tDescarga}s total=${tTotal}s`);
+      return;
+    }
+
+    // Respaldo: archivo maestro .xlsx completo (mientras no exista el JSON).
     const url = `https://graph.microsoft.com/v1.0/drives/${GRAPH_CONFIG.driveId}/items/${GRAPH_CONFIG.itemId}/content`;
-    setGraphStatus('Descargando archivo desde SharePoint...', false);
+    setGraphStatus('Descargando archivo desde SharePoint (Excel completo — configura el JSON liviano para acelerar esto)...', false);
     const fileResp = await fetch(url, { headers:{ Authorization: 'Bearer ' + token } });
     if(!fileResp.ok) throw new Error('No se pudo descargar el Excel (revisa driveId/itemId y permisos).');
     const arrayBuffer = await fileResp.arrayBuffer();
@@ -1554,11 +1658,11 @@ async function sincronizarDesdeGraph(){
     const tTotal = ((performance.now() - t0) / 1000).toFixed(1);
 
     setGraphStatus(
-      `Conectado. Última sincronización: ${fmtDateTime(new Date())} — ` +
+      `Conectado (vía Excel completo). Última sincronización: ${fmtDateTime(new Date())} — ` +
       `descarga ${tDescarga}s + procesamiento ${tProceso}s (${ULTIMA_VIA_LECTURA === 'worker' ? 'segundo plano' : 'hilo principal'}) = ${tTotal}s total.`,
       false
     );
-    console.log(`[Sincronización Graph] descarga=${tDescarga}s proceso=${tProceso}s total=${tTotal}s vía=${ULTIMA_VIA_LECTURA}`);
+    console.log(`[Sincronización Graph · xlsx] descarga=${tDescarga}s proceso=${tProceso}s total=${tTotal}s vía=${ULTIMA_VIA_LECTURA}`);
   }catch(err){
     setGraphStatus('Error al sincronizar: ' + err.message, true);
     console.error(err);
