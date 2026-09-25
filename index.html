@@ -1538,10 +1538,12 @@ const GRAPH_CONFIG = {
   driveId:   'b!pGxR8bCf-kGHBYY4apFN98pBkgc5TY9Gv8VLyKjUv_7EKnOTOJNUSaLBL80J3D8R',
   itemId:    '01VYLCTT2I6TRENTXW5BE243TTUKIGFVN2',
   // Archivo LIVIANO (.json, generado por Power Automate) — esta es la vía
-  // rápida. Complétalos cuando tengas el flujo funcionando; mientras tanto
-  // el tablero sigue usando el archivo maestro de arriba.
+  // rápida. Se busca por RUTA (no por itemId): el itemId puede cambiar
+  // cada vez que el flujo lo sobrescribe, pero la ruta (carpeta + nombre)
+  // se mantiene estable. Mientras tanto el tablero sigue usando el
+  // archivo maestro de arriba.
   jsonDriveId: 'b!SBkbgI0YwUi9iN9tMP21ZMpBkgc5TY9Gv8VLyKjUv_7EKnOTOJNUSaLBL80J3D8R',
-  jsonItemId:  '01S74TB2FZAABTR67U25GIBISUZ2L5AFBX',
+  jsonPath: 'Copia cuadro de tareas/datos_dashboard.json',
   redirectUri: 'https://litigiosgm.github.io/Dashboard-Litigios/',
   refreshMinutes: 60
 };
@@ -1556,7 +1558,7 @@ function graphConfigured(){
 
 function jsonConfigured(){
   return typeof GRAPH_CONFIG.jsonDriveId === 'string' && !GRAPH_CONFIG.jsonDriveId.startsWith('PENDIENTE_')
-      && typeof GRAPH_CONFIG.jsonItemId === 'string' && !GRAPH_CONFIG.jsonItemId.startsWith('PENDIENTE_');
+      && typeof GRAPH_CONFIG.jsonPath === 'string' && !GRAPH_CONFIG.jsonPath.startsWith('PENDIENTE_');
 }
 
 async function initMsal(){
@@ -1637,10 +1639,14 @@ async function sincronizarDesdeGraph(){
 
     if(jsonConfigured()){
       // Vía rápida: archivo .json liviano generado por Power Automate.
-      const url = `https://graph.microsoft.com/v1.0/drives/${GRAPH_CONFIG.jsonDriveId}/items/${GRAPH_CONFIG.jsonItemId}/content`;
+      // Se busca por ruta (carpeta + nombre de archivo), no por itemId —
+      // así no importa si Power Automate lo recrea internamente con un
+      // itemId distinto en cada ejecución; la ruta no cambia.
+      const rutaCodificada = GRAPH_CONFIG.jsonPath.split('/').map(encodeURIComponent).join('/');
+      const url = `https://graph.microsoft.com/v1.0/drives/${GRAPH_CONFIG.jsonDriveId}/root:/${rutaCodificada}:/content`;
       setGraphStatus('Descargando datos (JSON liviano)...', false);
       const resp = await fetch(url, { headers:{ Authorization: 'Bearer ' + token } });
-      if(!resp.ok) throw new Error('No se pudo descargar el JSON (revisa jsonDriveId/jsonItemId y que el flujo de Power Automate haya corrido).');
+      if(!resp.ok) throw new Error('No se pudo descargar el JSON (revisa jsonDriveId/jsonPath y que el flujo de Power Automate haya corrido).');
       const json = await resp.json();
       const tDescarga = ((performance.now() - t0) / 1000).toFixed(1);
 
