@@ -1639,11 +1639,18 @@ async function sincronizarDesdeGraph(){
 
     if(jsonConfigured()){
       // Vía rápida: archivo .json liviano generado por Power Automate.
-      // Se busca por ruta (carpeta + nombre de archivo), no por itemId —
-      // así no importa si Power Automate lo recrea internamente con un
-      // itemId distinto en cada ejecución; la ruta no cambia.
+      // Se resuelve en dos pasos: primero el itemId ACTUAL a partir de la
+      // ruta (que es estable), y luego se descarga el contenido con ese
+      // itemId — así nunca dependemos de un itemId fijo que Power Automate
+      // pueda cambiar internamente al sobrescribir el archivo.
       const rutaCodificada = GRAPH_CONFIG.jsonPath.split('/').map(encodeURIComponent).join('/');
-      const url = `https://graph.microsoft.com/v1.0/drives/${GRAPH_CONFIG.jsonDriveId}/root:/${rutaCodificada}:/content`;
+      const metaUrl = `https://graph.microsoft.com/v1.0/drives/${GRAPH_CONFIG.jsonDriveId}/root:/${rutaCodificada}`;
+      setGraphStatus('Localizando archivo (JSON liviano)...', false);
+      const metaResp = await fetch(metaUrl, { headers:{ Authorization: 'Bearer ' + token } });
+      if(!metaResp.ok) throw new Error('No se encontró el archivo JSON en esa ruta (revisa jsonDriveId/jsonPath y que el flujo de Power Automate haya corrido).');
+      const meta = await metaResp.json();
+
+      const url = `https://graph.microsoft.com/v1.0/drives/${GRAPH_CONFIG.jsonDriveId}/items/${meta.id}/content`;
       setGraphStatus('Descargando datos (JSON liviano)...', false);
       const resp = await fetch(url, { headers:{ Authorization: 'Bearer ' + token } });
       if(!resp.ok) throw new Error('No se pudo descargar el JSON (revisa jsonDriveId/jsonPath y que el flujo de Power Automate haya corrido).');
