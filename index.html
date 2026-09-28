@@ -202,37 +202,12 @@
   .timeline-item .ti-info b{font-weight:700;}
   .timeline-item .ti-info .ti-sub{color:var(--gris); font-size:.76rem;}
 
-  /* ---- Audiencias: layout con línea de tiempo + calendario (mitad y mitad) ---- */
-  .audiencias-layout{display:flex; gap:18px; align-items:flex-start;}
-  .audiencias-timeline-col{flex:1 1 50%; min-width:0;}
-  .audiencias-mini-cal-col{
-    flex:1 1 50%; min-width:0; background:var(--card); border:1px solid var(--borde);
-    border-radius:12px; padding:16px;
+  /* ---- Audiencias: calendario grande arriba + consolidado abajo ---- */
+  .aud-chip{
+    border-radius:6px; padding:3px 6px; font-size:.66rem; line-height:1.25; color:#fff;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600;
   }
-  .mini-calendar-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
-  .mini-calendar-nav button{
-    border:1px solid var(--borde); background:#fff; border-radius:8px; padding:6px 14px;
-    cursor:pointer; font-size:.9rem; font-weight:700;
-  }
-  .mini-calendar-nav button:hover{border-color:var(--oliva);}
-  .mini-calendar-month-label{font-weight:800; font-size:1rem; text-transform:capitalize;}
-  .mini-calendar-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
-  .mini-calendar-weekday{font-size:.76rem; font-weight:700; color:var(--gris); text-align:center; padding:4px 0;}
-  .mini-calendar-day{
-    min-height:72px; border:1px solid var(--borde); border-radius:8px; background:#fbfbfb;
-    padding:6px; font-size:.8rem; display:flex; flex-direction:column; align-items:center;
-    gap:5px; cursor:default;
-  }
-  .mini-calendar-day.outside{background:#f7f7f5; border-color:#f0f0ee;}
-  .mini-calendar-day.outside .mc-num{color:#ccc;}
-  .mini-calendar-day.today{border-color:var(--oliva); border-width:2px;}
-  .mini-calendar-day .mc-num{font-weight:700; font-size:.92rem; color:var(--texto);}
-  .mini-calendar-day .mc-dots{display:flex; gap:3px; flex-wrap:wrap; justify-content:center;}
-  .mini-calendar-day .mc-dot{width:9px; height:9px; border-radius:50%;}
-  @media (max-width:1000px){
-    .audiencias-layout{flex-direction:column;}
-    .audiencias-mini-cal-col{flex:0 0 auto; width:100%;}
-  }
+  .aud-chip + .aud-chip{ margin-top:2px; }
   .badge-cierre{
     display:inline-block; background:var(--rojo-bg); color:var(--rojo); font-weight:700;
     font-size:.66rem; text-transform:uppercase; letter-spacing:.2px; padding:3px 9px;
@@ -380,7 +355,7 @@
 
   <!-- ================= HOJA: AUDIENCIAS ================= -->
   <div class="view-pane" id="pane-audiencias">
-    <h2 class="section-title">Línea de tiempo de audiencias</h2>
+    <h2 class="section-title">Calendario de audiencias</h2>
     <div class="calendar-toolbar">
       <select id="audArea">
         <option value="">Área: todas</option>
@@ -394,21 +369,18 @@
         <span class="legend-bar"></span>
         <span>30 días +</span>
       </div>
-    </div>
-    <div class="audiencias-layout">
-      <div class="audiencias-timeline-col">
-        <div id="audienciasTimeline"></div>
-      </div>
-      <div class="audiencias-mini-cal-col">
-        <div class="mini-calendar-nav">
-          <button id="audCalPrev" type="button">◀</button>
-          <span class="mini-calendar-month-label" id="audCalMonthLabel"></span>
-          <button id="audCalNext" type="button">▶</button>
-        </div>
-        <div class="mini-calendar-grid" id="audCalWeekdays"></div>
-        <div class="mini-calendar-grid" id="audCalGrid"></div>
+      <div class="calendar-nav">
+        <button id="audCalPrev" type="button">◀</button>
+        <span class="calendar-month-label" id="audCalMonthLabel"></span>
+        <button id="audCalHoy" type="button">Hoy</button>
+        <button id="audCalNext" type="button">▶</button>
       </div>
     </div>
+    <div class="calendar-grid" id="audCalWeekdays"></div>
+    <div class="calendar-grid" id="audCalGrid" style="margin-top:6px;"></div>
+
+    <h2 class="section-title" style="margin-top:28px;">Consolidado de audiencias</h2>
+    <div id="audienciasTimeline"></div>
   </div>
 
 </div>
@@ -1158,7 +1130,7 @@ function renderAudienciasCalendario(){
   const nombreMes = audCalMonthCursor.toLocaleDateString('es-CO', { month:'long', year:'numeric' });
   document.getElementById('audCalMonthLabel').textContent = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
   document.getElementById('audCalWeekdays').innerHTML =
-    ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d => `<div class="mini-calendar-weekday">${d}</div>`).join('');
+    ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d => `<div class="calendar-weekday">${d}</div>`).join('');
 
   const year = audCalMonthCursor.getFullYear();
   const month = audCalMonthCursor.getMonth();
@@ -1178,18 +1150,26 @@ function renderAudienciasCalendario(){
     const key = claveFecha(cursor);
     const esDelMes = cursor.getMonth() === month;
     const esHoy = cursor.getTime() === hoy.getTime();
-    const audienciasDia = porFecha[key] || [];
-    const titulo = audienciasDia.map(it => `${it.cliente || 'Cliente sin nombre'} (${it.area})`).join(' · ');
-    const puntos = audienciasDia.slice(0, 6).map(it => `<span class="mc-dot" style="background:${colorAudiencia(it.dias)};"></span>`).join('');
-    celdas.push(`<div class="mini-calendar-day${esDelMes ? '' : ' outside'}${esHoy ? ' today' : ''}"${titulo ? ` title="${escapeHtml(titulo)}"` : ''}>
-      <div class="mc-num">${cursor.getDate()}</div>
-      <div class="mc-dots">${puntos}</div>
+    const audienciasDia = (porFecha[key] || []).sort((a,b) => a.dias - b.dias);
+    const chips = audienciasDia.map(it => {
+      const color = colorAudiencia(it.dias);
+      const texto = `${it.cliente || 'Sin cliente'} — ${it.area}`;
+      const tituloCompleto = `${it.cliente || 'Sin cliente'} (${it.area}) · Carpeta ${it.carpeta ?? '—'} · Apoderado: ${it.apoderado ?? '—'}`;
+      return `<div class="aud-chip" style="background:${color};" title="${escapeHtml(tituloCompleto)}">${escapeHtml(texto)}</div>`;
+    }).join('');
+    celdas.push(`<div class="calendar-day${esDelMes ? '' : ' outside'}${esHoy ? ' today' : ''}">
+      <div class="day-num">${cursor.getDate()}</div>
+      ${chips}
     </div>`);
     cursor.setDate(cursor.getDate() + 1);
   }
   document.getElementById('audCalGrid').innerHTML = celdas.join('');
 }
 
+document.getElementById('audCalHoy').addEventListener('click', () => {
+  audCalMonthCursor = hoyFecha();
+  renderAudienciasCalendario();
+});
 document.getElementById('audCalPrev').addEventListener('click', () => {
   audCalMonthCursor = new Date(audCalMonthCursor.getFullYear(), audCalMonthCursor.getMonth() - 1, 1);
   renderAudienciasCalendario();
