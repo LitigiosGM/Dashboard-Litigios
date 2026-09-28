@@ -202,33 +202,33 @@
   .timeline-item .ti-info b{font-weight:700;}
   .timeline-item .ti-info .ti-sub{color:var(--gris); font-size:.76rem;}
 
-  /* ---- Audiencias: layout con línea de tiempo + calendario compacto ---- */
-  .audiencias-layout{display:flex; gap:16px; align-items:flex-start;}
-  .audiencias-timeline-col{flex:1; min-width:0;}
+  /* ---- Audiencias: layout con línea de tiempo + calendario (mitad y mitad) ---- */
+  .audiencias-layout{display:flex; gap:18px; align-items:flex-start;}
+  .audiencias-timeline-col{flex:1 1 50%; min-width:0;}
   .audiencias-mini-cal-col{
-    flex:0 0 300px; background:var(--card); border:1px solid var(--borde);
-    border-radius:12px; padding:12px;
+    flex:1 1 50%; min-width:0; background:var(--card); border:1px solid var(--borde);
+    border-radius:12px; padding:16px;
   }
-  .mini-calendar-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .mini-calendar-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
   .mini-calendar-nav button{
-    border:1px solid var(--borde); background:#fff; border-radius:6px; padding:3px 9px;
-    cursor:pointer; font-size:.76rem; font-weight:700;
+    border:1px solid var(--borde); background:#fff; border-radius:8px; padding:6px 14px;
+    cursor:pointer; font-size:.9rem; font-weight:700;
   }
   .mini-calendar-nav button:hover{border-color:var(--oliva);}
-  .mini-calendar-month-label{font-weight:800; font-size:.78rem; text-transform:capitalize;}
-  .mini-calendar-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:3px;}
-  .mini-calendar-weekday{font-size:.62rem; font-weight:700; color:var(--gris); text-align:center; padding:2px 0;}
+  .mini-calendar-month-label{font-weight:800; font-size:1rem; text-transform:capitalize;}
+  .mini-calendar-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
+  .mini-calendar-weekday{font-size:.76rem; font-weight:700; color:var(--gris); text-align:center; padding:4px 0;}
   .mini-calendar-day{
-    min-height:34px; border:1px solid var(--borde); border-radius:6px; background:#fbfbfb;
-    padding:2px; font-size:.66rem; display:flex; flex-direction:column; align-items:center;
-    gap:2px; cursor:default;
+    min-height:72px; border:1px solid var(--borde); border-radius:8px; background:#fbfbfb;
+    padding:6px; font-size:.8rem; display:flex; flex-direction:column; align-items:center;
+    gap:5px; cursor:default;
   }
   .mini-calendar-day.outside{background:#f7f7f5; border-color:#f0f0ee;}
   .mini-calendar-day.outside .mc-num{color:#ccc;}
   .mini-calendar-day.today{border-color:var(--oliva); border-width:2px;}
-  .mini-calendar-day .mc-num{font-weight:700; color:var(--texto);}
-  .mini-calendar-day .mc-dots{display:flex; gap:2px; flex-wrap:wrap; justify-content:center;}
-  .mini-calendar-day .mc-dot{width:6px; height:6px; border-radius:50%;}
+  .mini-calendar-day .mc-num{font-weight:700; font-size:.92rem; color:var(--texto);}
+  .mini-calendar-day .mc-dots{display:flex; gap:3px; flex-wrap:wrap; justify-content:center;}
+  .mini-calendar-day .mc-dot{width:9px; height:9px; border-radius:50%;}
   @media (max-width:1000px){
     .audiencias-layout{flex-direction:column;}
     .audiencias-mini-cal-col{flex:0 0 auto; width:100%;}
@@ -1158,7 +1158,7 @@ function renderAudienciasCalendario(){
   const nombreMes = audCalMonthCursor.toLocaleDateString('es-CO', { month:'long', year:'numeric' });
   document.getElementById('audCalMonthLabel').textContent = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
   document.getElementById('audCalWeekdays').innerHTML =
-    ['D','L','M','X','J','V','S'].map(d => `<div class="mini-calendar-weekday">${d}</div>`).join('');
+    ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map(d => `<div class="mini-calendar-weekday">${d}</div>`).join('');
 
   const year = audCalMonthCursor.getFullYear();
   const month = audCalMonthCursor.getMonth();
