@@ -201,6 +201,38 @@
   .timeline-item .ti-info{flex:1; color:var(--texto); line-height:1.5;}
   .timeline-item .ti-info b{font-weight:700;}
   .timeline-item .ti-info .ti-sub{color:var(--gris); font-size:.76rem;}
+
+  /* ---- Audiencias: layout con línea de tiempo + calendario compacto ---- */
+  .audiencias-layout{display:flex; gap:16px; align-items:flex-start;}
+  .audiencias-timeline-col{flex:1; min-width:0;}
+  .audiencias-mini-cal-col{
+    flex:0 0 300px; background:var(--card); border:1px solid var(--borde);
+    border-radius:12px; padding:12px;
+  }
+  .mini-calendar-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .mini-calendar-nav button{
+    border:1px solid var(--borde); background:#fff; border-radius:6px; padding:3px 9px;
+    cursor:pointer; font-size:.76rem; font-weight:700;
+  }
+  .mini-calendar-nav button:hover{border-color:var(--oliva);}
+  .mini-calendar-month-label{font-weight:800; font-size:.78rem; text-transform:capitalize;}
+  .mini-calendar-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:3px;}
+  .mini-calendar-weekday{font-size:.62rem; font-weight:700; color:var(--gris); text-align:center; padding:2px 0;}
+  .mini-calendar-day{
+    min-height:34px; border:1px solid var(--borde); border-radius:6px; background:#fbfbfb;
+    padding:2px; font-size:.66rem; display:flex; flex-direction:column; align-items:center;
+    gap:2px; cursor:default;
+  }
+  .mini-calendar-day.outside{background:#f7f7f5; border-color:#f0f0ee;}
+  .mini-calendar-day.outside .mc-num{color:#ccc;}
+  .mini-calendar-day.today{border-color:var(--oliva); border-width:2px;}
+  .mini-calendar-day .mc-num{font-weight:700; color:var(--texto);}
+  .mini-calendar-day .mc-dots{display:flex; gap:2px; flex-wrap:wrap; justify-content:center;}
+  .mini-calendar-day .mc-dot{width:6px; height:6px; border-radius:50%;}
+  @media (max-width:1000px){
+    .audiencias-layout{flex-direction:column;}
+    .audiencias-mini-cal-col{flex:0 0 auto; width:100%;}
+  }
   .badge-cierre{
     display:inline-block; background:var(--rojo-bg); color:var(--rojo); font-weight:700;
     font-size:.66rem; text-transform:uppercase; letter-spacing:.2px; padding:3px 9px;
@@ -363,7 +395,20 @@
         <span>30 días +</span>
       </div>
     </div>
-    <div id="audienciasTimeline"></div>
+    <div class="audiencias-layout">
+      <div class="audiencias-timeline-col">
+        <div id="audienciasTimeline"></div>
+      </div>
+      <div class="audiencias-mini-cal-col">
+        <div class="mini-calendar-nav">
+          <button id="audCalPrev" type="button">◀</button>
+          <span class="mini-calendar-month-label" id="audCalMonthLabel"></span>
+          <button id="audCalNext" type="button">▶</button>
+        </div>
+        <div class="mini-calendar-grid" id="audCalWeekdays"></div>
+        <div class="mini-calendar-grid" id="audCalGrid"></div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -1080,10 +1125,79 @@ function renderAudiencias(){
     </div>`;
   });
   cont.innerHTML = mesActualHtml;
+  renderAudienciasCalendario();
 }
 
 document.getElementById('audArea').addEventListener('change', renderAudiencias);
 document.getElementById('audCliente').addEventListener('change', renderAudiencias);
+
+/* ============================================================
+   AUDIENCIAS: calendario compacto (a la derecha de la línea de tiempo)
+   ============================================================ */
+let audCalMonthCursor = hoyFecha();
+
+function renderAudienciasCalendario(){
+  const areaSel = document.getElementById('audArea').value;
+  const clienteSel = document.getElementById('audCliente').value;
+  const hoy = hoyFecha();
+
+  const items = PROCESOS_ROWS
+    .filter(r => {
+      const f = soloFecha(r.audienciaFecha);
+      if(!f) return false;
+      if(areaSel && r.area !== areaSel) return false;
+      if(clienteSel && norm(r.cliente) !== norm(clienteSel)) return false;
+      return true;
+    })
+    .map(r => {
+      const f = soloFecha(r.audienciaFecha);
+      const dias = Math.round((f.getTime() - hoy.getTime()) / 86400000);
+      return { ...r, fecha: f, dias };
+    });
+
+  const nombreMes = audCalMonthCursor.toLocaleDateString('es-CO', { month:'long', year:'numeric' });
+  document.getElementById('audCalMonthLabel').textContent = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+  document.getElementById('audCalWeekdays').innerHTML =
+    ['D','L','M','X','J','V','S'].map(d => `<div class="mini-calendar-weekday">${d}</div>`).join('');
+
+  const year = audCalMonthCursor.getFullYear();
+  const month = audCalMonthCursor.getMonth();
+  const primerDia = new Date(year, month, 1);
+  const ultimoDia = new Date(year, month + 1, 0);
+  const inicioGrid = new Date(primerDia); inicioGrid.setDate(inicioGrid.getDate() - primerDia.getDay());
+  const finGrid = new Date(ultimoDia); finGrid.setDate(finGrid.getDate() + (6 - ultimoDia.getDay()));
+
+  const porFecha = {};
+  items.forEach(it => {
+    (porFecha[claveFecha(it.fecha)] = porFecha[claveFecha(it.fecha)] || []).push(it);
+  });
+
+  const celdas = [];
+  const cursor = new Date(inicioGrid);
+  while(cursor <= finGrid){
+    const key = claveFecha(cursor);
+    const esDelMes = cursor.getMonth() === month;
+    const esHoy = cursor.getTime() === hoy.getTime();
+    const audienciasDia = porFecha[key] || [];
+    const titulo = audienciasDia.map(it => `${it.cliente || 'Cliente sin nombre'} (${it.area})`).join(' · ');
+    const puntos = audienciasDia.slice(0, 6).map(it => `<span class="mc-dot" style="background:${colorAudiencia(it.dias)};"></span>`).join('');
+    celdas.push(`<div class="mini-calendar-day${esDelMes ? '' : ' outside'}${esHoy ? ' today' : ''}"${titulo ? ` title="${escapeHtml(titulo)}"` : ''}>
+      <div class="mc-num">${cursor.getDate()}</div>
+      <div class="mc-dots">${puntos}</div>
+    </div>`);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  document.getElementById('audCalGrid').innerHTML = celdas.join('');
+}
+
+document.getElementById('audCalPrev').addEventListener('click', () => {
+  audCalMonthCursor = new Date(audCalMonthCursor.getFullYear(), audCalMonthCursor.getMonth() - 1, 1);
+  renderAudienciasCalendario();
+});
+document.getElementById('audCalNext').addEventListener('click', () => {
+  audCalMonthCursor = new Date(audCalMonthCursor.getFullYear(), audCalMonthCursor.getMonth() + 1, 1);
+  renderAudienciasCalendario();
+});
 
 /* ============================================================
    AVISO DE PENDIENTES DEL DÍA (cada 60 minutos)
